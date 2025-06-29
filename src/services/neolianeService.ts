@@ -1006,8 +1006,8 @@ class NeolianeService {
           nom: product.gammeLabel,
           prix: Math.round(prixFinal * 100) / 100,
           product_id: product.gammeId.toString(),
-          // L'API attend un identifiant numérique, sans préfixe "formula_"
-          formula_id: product.gammeId.toString(),
+          // L'API attend un identifiant numérique
+          formula_id: this.getFormulaId(product.gammeId),
           gammeId: product.gammeId,
           garanties: garanties
         });
@@ -1175,7 +1175,10 @@ class NeolianeService {
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
-                  formula_id: this.sanitizeFormulaId(selectedOffre.formula_id) || '3847'
+                  formula_id:
+                    this.sanitizeFormulaId(selectedOffre.formula_id) ||
+                    this.getFormulaId(selectedOffre.gammeId) ||
+                    '3847'
                 }
               ]
             }
@@ -1262,6 +1265,12 @@ class NeolianeService {
     console.log(`🔄 Mapping CSP: "${regime}" -> "${mappedValue}"`);
     
     return mappedValue || '11'; // Salarié par défaut
+  }
+
+  // Dérive l'ID de formule attendu par l'API à partir de l'ID de gamme
+  private getFormulaId(gammeId?: number): string {
+    if (!gammeId) return '';
+    return (gammeId + 3309).toString();
   }
 
   // Nettoyage de l'identifiant de formule pour garantir un entier
