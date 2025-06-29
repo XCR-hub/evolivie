@@ -1175,10 +1175,9 @@ class NeolianeService {
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
-                  formula_id: this.mapFormulaId(
+                  formula_id:
                     this.sanitizeFormulaId(selectedOffre.formula_id) ||
-                      (selectedOffre.product_id || '538')
-                  )
+                    this.mapFormulaId(selectedOffre.product_id || '538')
                 }
               ]
             }
