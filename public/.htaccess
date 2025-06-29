@@ -1,0 +1,20 @@
+# Configuration simplifiée pour IONOS
+RewriteEngine On
+
+# Configuration des types MIME pour JavaScript
+AddType application/javascript .js
+AddType text/javascript .js
+
+# Gestion des routes React (SPA) - Redirection vers index.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
+
+# Cache basique
+<IfModule mod_expires.c>
+    ExpiresActive on
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 month"
+</IfModule>

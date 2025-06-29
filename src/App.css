@@ -1,0 +1,310 @@
+/* Styles globaux Evolivie */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Variables CSS Evolivie */
+:root {
+  --evolivie-mint: #3AB795;
+  --evolivie-coral: #FF6B6B;
+  --evolivie-mint-light: #4ECDC4;
+  --evolivie-mint-dark: #2A9D8F;
+  --evolivie-coral-light: #FF8E8E;
+  --evolivie-coral-dark: #E55555;
+  --evolivie-gray-50: #F8FFFE;
+  --evolivie-gray-100: #F1F5F4;
+  --evolivie-gray-900: #1A1A1A;
+  --border-radius: 0.75rem;
+  --box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reset et styles de base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--evolivie-gray-900);
+  line-height: 1.6;
+  background-color: var(--evolivie-gray-50);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typographie Evolivie */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--evolivie-gray-900);
+}
+
+.font-poppins {
+  font-family: 'Poppins', sans-serif;
+}
+
+.font-inter {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Couleurs Evolivie */
+.text-evolivie-mint { color: var(--evolivie-mint); }
+.text-evolivie-coral { color: var(--evolivie-coral); }
+.bg-evolivie-mint { background-color: var(--evolivie-mint); }
+.bg-evolivie-coral { background-color: var(--evolivie-coral); }
+.border-evolivie-mint { border-color: var(--evolivie-mint); }
+.border-evolivie-coral { border-color: var(--evolivie-coral); }
+
+/* Boutons Evolivie */
+.btn-evolivie-primary {
+  background: linear-gradient(135deg, var(--evolivie-mint) 0%, var(--evolivie-mint-light) 100%);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: var(--border-radius);
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--box-shadow);
+}
+
+.btn-evolivie-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(58, 183, 149, 0.3);
+}
+
+.btn-evolivie-secondary {
+  background: linear-gradient(135deg, var(--evolivie-coral) 0%, var(--evolivie-coral-light) 100%);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: var(--border-radius);
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--box-shadow);
+}
+
+.btn-evolivie-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(255, 107, 107, 0.3);
+}
+
+.btn-evolivie-outline {
+  background: transparent;
+  color: var(--evolivie-mint);
+  padding: 1rem 2rem;
+  border-radius: var(--border-radius);
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  border: 2px solid var(--evolivie-mint);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-evolivie-outline:hover {
+  background: var(--evolivie-mint);
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* Cards Evolivie */
+.card-evolivie {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 2rem;
+  transition: var(--transition);
+  border: 1px solid rgba(58, 183, 149, 0.1);
+}
+
+.card-evolivie:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border-color: var(--evolivie-mint);
+}
+
+/* Gradients Evolivie */
+.gradient-evolivie-primary {
+  background: linear-gradient(135deg, var(--evolivie-mint) 0%, var(--evolivie-mint-light) 100%);
+}
+
+.gradient-evolivie-secondary {
+  background: linear-gradient(135deg, var(--evolivie-coral) 0%, var(--evolivie-coral-light) 100%);
+}
+
+.gradient-evolivie-hero {
+  background: linear-gradient(135deg, var(--evolivie-mint) 0%, var(--evolivie-mint-light) 50%, var(--evolivie-coral) 100%);
+}
+
+/* Animations personnalisées */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-evolivie {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(58, 183, 149, 0.4); }
+  50% { box-shadow: 0 0 0 20px rgba(58, 183, 149, 0); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-evolivie {
+  animation: pulse-evolivie 2s infinite;
+}
+
+/* Styles pour les formulaires */
+.form-input-evolivie {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid #E5E7EB;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: var(--transition);
+  background-color: white;
+  font-family: 'Inter', sans-serif;
+}
+
+.form-input-evolivie:focus {
+  outline: none;
+  border-color: var(--evolivie-mint);
+  box-shadow: 0 0 0 3px rgba(58, 183, 149, 0.1);
+}
+
+/* Styles pour les toasts */
+.Toastify__toast {
+  border-radius: var(--border-radius);
+  font-family: 'Inter', sans-serif;
+}
+
+.Toastify__toast--success {
+  background-color: var(--evolivie-mint);
+}
+
+.Toastify__toast--error {
+  background-color: var(--evolivie-coral);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .btn-evolivie-primary,
+  .btn-evolivie-secondary,
+  .btn-evolivie-outline {
+    padding: 0.875rem 1.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .card-evolivie {
+    padding: 1.5rem;
+  }
+}
+
+/* Accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus visible pour l'accessibilité */
+.focus-visible:focus {
+  outline: 2px solid var(--evolivie-mint);
+  outline-offset: 2px;
+}
+
+/* Styles pour le blog */
+.blog-content {
+  font-family: 'Inter', sans-serif;
+  line-height: 1.8;
+  color: #374151;
+}
+
+.blog-content h2 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.875rem;
+  font-weight: 600;
+  color: var(--evolivie-gray-900);
+  margin: 2rem 0 1rem 0;
+}
+
+.blog-content h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--evolivie-gray-900);
+  margin: 1.5rem 0 0.75rem 0;
+}
+
+.blog-content p {
+  margin-bottom: 1.5rem;
+}
+
+.blog-content ul, .blog-content ol {
+  margin: 1.5rem 0;
+  padding-left: 2rem;
+}
+
+.blog-content li {
+  margin-bottom: 0.5rem;
+}
+
+.blog-content blockquote {
+  border-left: 4px solid var(--evolivie-mint);
+  padding-left: 1.5rem;
+  margin: 2rem 0;
+  font-style: italic;
+  color: #6B7280;
+}
+
+.blog-content a {
+  color: var(--evolivie-mint);
+  text-decoration: underline;
+  transition: var(--transition);
+}
+
+.blog-content a:hover {
+  color: var(--evolivie-mint-dark);
+}
+
+/* Styles pour les badges */
+.badge-evolivie {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+}
+
+.badge-evolivie-mint {
+  background-color: rgba(58, 183, 149, 0.1);
+  color: var(--evolivie-mint-dark);
+}
+
+.badge-evolivie-coral {
+  background-color: rgba(255, 107, 107, 0.1);
+  color: var(--evolivie-coral-dark);
+}
+
+/* Styles pour les icônes */
+.icon-evolivie {
+  color: var(--evolivie-mint);
+  transition: var(--transition);
+}
+
+.icon-evolivie:hover {
+  color: var(--evolivie-mint-dark);
+  transform: scale(1.1);
+}

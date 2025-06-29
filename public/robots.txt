@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://www.evolivie.com/sitemap.xml
+
+# Disallow admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /*.json$
+
+# Allow important pages
+Allow: /
+Allow: /simulation
+Allow: /blog
+Allow: /contact
+Allow: /article/
+
+# Crawl delay
+Crawl-delay: 1
