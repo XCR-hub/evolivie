@@ -1006,8 +1006,8 @@ class NeolianeService {
           nom: product.gammeLabel,
           prix: Math.round(prixFinal * 100) / 100,
           product_id: product.gammeId.toString(),
-          // L'API attend un identifiant numérique, sans préfixe "formula_"
-          formula_id: product.gammeId.toString(),
+          // Détermination automatique de la formule correspondante
+          formula_id: this.mapFormulaId(product.gammeId.toString()),
           gammeId: product.gammeId,
           garanties: garanties
         });
@@ -1175,7 +1175,10 @@ class NeolianeService {
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
-                  formula_id: this.sanitizeFormulaId(selectedOffre.formula_id) || '3847'
+                  formula_id: this.mapFormulaId(
+                    this.sanitizeFormulaId(selectedOffre.formula_id) ||
+                      (selectedOffre.product_id || '538')
+                  )
                 }
               ]
             }
@@ -1269,6 +1272,31 @@ class NeolianeService {
     if (!formulaId) return formulaId;
     const match = formulaId.match(/\d+/);
     return match ? match[0] : formulaId;
+  }
+
+  // Mappe un identifiant de produit (gammeId) vers l'identifiant de formule attendu
+  // Certains produits utilisent un ID différent pour la formule. Pour les cas
+  // connus on retourne la valeur officielle, sinon on applique une règle par défaut
+  private mapFormulaId(productId: string): string {
+    const mapping: { [key: string]: string } = {
+      '538': '3847',
+      '539': '3848',
+      '540': '3849',
+      // Exemple issu de la documentation pour les contrats obsèques
+      '619': '5092'
+    };
+
+    if (mapping[productId]) {
+      return mapping[productId];
+    }
+
+    const id = parseInt(productId, 10);
+    if (!isNaN(id)) {
+      // La majorité des produits santé semblent suivre ce décalage constant
+      return (id + 3309).toString();
+    }
+
+    return productId;
   }
 
   // Méthodes de configuration (simplifiées car la clé est intégrée)
