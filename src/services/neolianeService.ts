@@ -1006,7 +1006,8 @@ class NeolianeService {
           nom: product.gammeLabel,
           prix: Math.round(prixFinal * 100) / 100,
           product_id: product.gammeId.toString(),
-          formula_id: `formula_${product.gammeId}`,
+          // L'API attend un identifiant numérique, sans préfixe "formula_"
+          formula_id: product.gammeId.toString(),
           gammeId: product.gammeId,
           garanties: garanties
         });
@@ -1174,7 +1175,7 @@ class NeolianeService {
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
-                  formula_id: selectedOffre.formula_id || '3847'
+                  formula_id: this.sanitizeFormulaId(selectedOffre.formula_id) || '3847'
                 }
               ]
             }
@@ -1261,6 +1262,13 @@ class NeolianeService {
     console.log(`🔄 Mapping CSP: "${regime}" -> "${mappedValue}"`);
     
     return mappedValue || '11'; // Salarié par défaut
+  }
+
+  // Nettoyage de l'identifiant de formule pour garantir un entier
+  private sanitizeFormulaId(formulaId?: string): string | undefined {
+    if (!formulaId) return formulaId;
+    const match = formulaId.match(/\d+/);
+    return match ? match[0] : formulaId;
   }
 
   // Méthodes de configuration (simplifiées car la clé est intégrée)
