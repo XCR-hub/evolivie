@@ -1175,10 +1175,12 @@ class NeolianeService {
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
-                  formula_id: this.mapFormulaId(
-                    this.sanitizeFormulaId(selectedOffre.formula_id) ||
-                      (selectedOffre.product_id || '538')
-                  )
+                  // Ne pas remapper si l'offre possède déjà un formula_id
+                  // La valeur est simplement nettoyée pour ne conserver que les chiffres
+                  // et en cas d'absence on calcule à partir du product_id
+                  formula_id: selectedOffre.formula_id
+                    ? this.sanitizeFormulaId(selectedOffre.formula_id)
+                    : this.mapFormulaId(selectedOffre.product_id || '538')
                 }
               ]
             }
