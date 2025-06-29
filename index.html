@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#3AB795" />
+    
+    <!-- Preconnect pour optimiser les performances -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://www.evolivie.com">
+    
+    <!-- Fonts Evolivie -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Meta par défaut (sera remplacé par React Helmet) -->
+    <title>Evolivie - Mutuelle santé en ligne pour particuliers et TNS</title>
+    <meta name="description" content="Souscrivez votre mutuelle santé en ligne en 5 minutes. Devis gratuit, tarifs transparents, garanties adaptées aux particuliers et TNS. Evolivie, votre partenaire santé." />
+    
+    <!-- Schema.org pour l'organisation -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Evolivie",
+      "url": "https://www.evolivie.com",
+      "logo": "https://www.evolivie.com/logo-evolivie.png",
+      "description": "Mutuelle santé en ligne pour particuliers et TNS",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "123 Avenue de la Santé",
+        "addressLocality": "Paris",
+        "postalCode": "75001",
+        "addressCountry": "FR"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+33-1-23-45-67-89",
+        "contactType": "customer service",
+        "availableLanguage": "French"
+      },
+      "sameAs": [
+        "https://www.linkedin.com/company/evolivie",
+        "https://twitter.com/evolivie"
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
