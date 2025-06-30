@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { User, CreditCard, FileText, CheckCircle, Download, Upload, X } from 'lucide-react';
 import { neolianeService, type StepConcernRequest, type StepBankRequest, type SubscriptionFlowState, type Offre } from '../services/neolianeService';
+import { supabase } from '../lib/supabase';
 import FileUpload from './FileUpload';
 
 interface SubscriptionFormProps {
@@ -117,6 +118,9 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
         stepConcernData
       );
 
+      // Sauvegarder en base Supabase
+      await saveSubscriptionToDatabase();
+
       setCurrentStep('stepbank');
       toast.success('Informations personnelles enregistrées avec succès !');
     } catch (error: any) {
@@ -200,6 +204,9 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
       console.log('✅ Validation des contrats...');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
+      // Mettre à jour le statut en base
+      await updateSubscriptionStatus('active');
+      
       setCurrentStep('completed');
       toast.success('Documents traités avec succès !');
     } catch (error: any) {
@@ -209,6 +216,47 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
       toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveSubscriptionToDatabase = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('subscriptions')
+        .insert({
+          user_id: user.id,
+          lead_id: subscriptionState.lead_id,
+          subscription_id: subscriptionState.subscription_id,
+          product_name: selectedOffre.nom,
+          formula_name: selectedOffre.nom,
+          monthly_price: selectedOffre.prix,
+          status: 'pending',
+          date_effect: new Date().toISOString().split('T')[0] // Date d'aujourd'hui par défaut
+        });
+
+      if (error) throw error;
+      console.log('✅ Souscription sauvegardée en base');
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde base:', error);
+    }
+  };
+
+  const updateSubscriptionStatus = async (status: string) => {
+    try {
+      if (!subscriptionState.subscription_id) return;
+
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ status })
+        .eq('subscription_id', subscriptionState.subscription_id);
+
+      if (error) throw error;
+      console.log(`✅ Statut mis à jour: ${status}`);
+    } catch (error) {
+      console.error('❌ Erreur mise à jour statut:', error);
     }
   };
 
