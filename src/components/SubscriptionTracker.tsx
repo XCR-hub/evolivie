@@ -67,7 +67,7 @@ const SubscriptionTracker: React.FC<SubscriptionTrackerProps> = ({
   }, [currentStep]);
 
   const shouldBeCompleted = (stepId: string, currentStepId: string): boolean => {
-    const stepOrder = ['stepconcern', 'stepbank', 'documents', 'completed'];
+    const stepOrder = ['stepconcern', 'stepbank', 'stepfuneral', 'stepcancellation', 'documents', 'completed'];
     const stepIndex = stepOrder.indexOf(stepId);
     const currentIndex = stepOrder.indexOf(currentStepId);
     return stepIndex < currentIndex;

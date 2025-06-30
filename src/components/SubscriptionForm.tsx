@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
-import { User, CreditCard, FileText, CheckCircle, Download, Upload, X } from 'lucide-react';
-import { neolianeService, type StepConcernRequest, type StepBankRequest, type SubscriptionFlowState, type Offre } from '../services/neolianeService';
+import { User, CreditCard, FileText, CheckCircle, Download, Upload, X, Shield, AlertCircle } from 'lucide-react';
+import { neolianeService, type StepConcernRequest, type StepBankRequest, type StepFuneralRequest, type StepCancellationRequest, type SubscriptionFlowState, type Offre } from '../services/neolianeService';
 import { supabase } from '../lib/supabase';
 import FileUpload from './FileUpload';
 
@@ -21,6 +21,7 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState(subscriptionState.step);
   const [loading, setLoading] = useState(false);
+  const [currentSubscriptionState, setCurrentSubscriptionState] = useState(subscriptionState);
   
   // Données du formulaire
   const [concernData, setConcernData] = useState({
@@ -48,10 +49,32 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
     isDifferentFromStepConcern: '0'
   });
 
+  const [funeralData, setFuneralData] = useState({
+    identitytype_id: '1',
+    identitynumber: '',
+    issuedate: '',
+    issuecity: '',
+    expirationdate: '',
+    birthcountry: 'FRANCE',
+    birthcity: '',
+    birthzipcode: '',
+    fiscalresident: '1',
+    enumobsequetypeclause_id: '1'
+  });
+
+  const [cancellationData, setCancellationData] = useState({
+    disable_cancellations: 0,
+    enable_cancellation: 0,
+    email: '',
+    contract_name: '',
+    contract_number: ''
+  });
+
   const [uploadedDocuments, setUploadedDocuments] = useState<{[key: string]: string}>({});
 
+  // Étape 1: Informations des adhérents (stepconcern)
   const handleStepConcern = async () => {
-    if (!subscriptionState.subscription_id) {
+    if (!currentSubscriptionState.subscription_id) {
       onError('ID de souscription manquant');
       return;
     }
@@ -113,15 +136,22 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
       console.log('📤 Envoi des données stepconcern:', stepConcernData);
 
       await neolianeService.submitStepConcern(
-        subscriptionState.subscription_id,
-        subscriptionState.subscription_id,
+        currentSubscriptionState.subscription_id,
+        currentSubscriptionState.subscription_id,
         stepConcernData
       );
 
       // Sauvegarder en base Supabase
       await saveSubscriptionToDatabase();
 
-      setCurrentStep('stepbank');
+      // Récupérer l'état mis à jour de la souscription
+      const updatedState = await neolianeService.getSubscription(currentSubscriptionState.subscription_id);
+      setCurrentSubscriptionState(prev => ({ ...prev, ...updatedState }));
+
+      // Déterminer la prochaine étape
+      const nextStep = getNextStep(updatedState);
+      setCurrentStep(nextStep);
+      
       toast.success('Informations personnelles enregistrées avec succès !');
     } catch (error: any) {
       console.error('❌ Erreur stepconcern:', error);
@@ -133,8 +163,9 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
     }
   };
 
+  // Étape 2: Informations bancaires (stepbank)
   const handleStepBank = async () => {
-    if (!subscriptionState.subscription_id) {
+    if (!currentSubscriptionState.subscription_id) {
       onError('ID de souscription manquant');
       return;
     }
@@ -168,12 +199,19 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
       console.log('📤 Envoi des données stepbank:', stepBankData);
 
       await neolianeService.submitStepBank(
-        subscriptionState.subscription_id,
-        subscriptionState.subscription_id,
+        currentSubscriptionState.subscription_id,
+        currentSubscriptionState.subscription_id,
         stepBankData
       );
 
-      setCurrentStep('documents');
+      // Récupérer l'état mis à jour de la souscription
+      const updatedState = await neolianeService.getSubscription(currentSubscriptionState.subscription_id);
+      setCurrentSubscriptionState(prev => ({ ...prev, ...updatedState }));
+
+      // Déterminer la prochaine étape
+      const nextStep = getNextStep(updatedState);
+      setCurrentStep(nextStep);
+
       toast.success('Informations bancaires enregistrées avec succès !');
     } catch (error: any) {
       console.error('❌ Erreur stepbank:', error);
@@ -185,25 +223,141 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
     }
   };
 
+  // Étape 3: Informations obsèques (stepfuneral) - uniquement pour les contrats obsèques
+  const handleStepFuneral = async () => {
+    if (!currentSubscriptionState.subscription_id) {
+      onError('ID de souscription manquant');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const stepFuneralData: StepFuneralRequest = {
+        details: [
+          {
+            identity: {
+              identitytype_id: funeralData.identitytype_id,
+              identitynumber: funeralData.identitynumber,
+              issuedate: funeralData.issuedate,
+              issuecity: funeralData.issuecity,
+              expirationdate: funeralData.expirationdate,
+              birthcountry: funeralData.birthcountry,
+              birthcity: funeralData.birthcity,
+              birthzipcode: funeralData.birthzipcode,
+              fiscalresident: funeralData.fiscalresident
+            },
+            enumobsequetypeclause_id: funeralData.enumobsequetypeclause_id
+          }
+        ]
+      };
+
+      console.log('📤 Envoi des données stepfuneral:', stepFuneralData);
+
+      await neolianeService.submitStepFuneral(
+        currentSubscriptionState.subscription_id,
+        currentSubscriptionState.subscription_id,
+        stepFuneralData
+      );
+
+      // Récupérer l'état mis à jour de la souscription
+      const updatedState = await neolianeService.getSubscription(currentSubscriptionState.subscription_id);
+      setCurrentSubscriptionState(prev => ({ ...prev, ...updatedState }));
+
+      // Déterminer la prochaine étape
+      const nextStep = getNextStep(updatedState);
+      setCurrentStep(nextStep);
+
+      toast.success('Informations obsèques enregistrées avec succès !');
+    } catch (error: any) {
+      console.error('❌ Erreur stepfuneral:', error);
+      const errorMessage = `Erreur lors de la soumission des informations obsèques: ${error.message}`;
+      onError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Étape 4: Gestion de la résiliation (stepcancellation)
+  const handleStepCancellation = async () => {
+    if (!currentSubscriptionState.subscription_id) {
+      onError('ID de souscription manquant');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const stepCancellationData: StepCancellationRequest = {
+        disable_cancellations: cancellationData.disable_cancellations,
+        details: [
+          {
+            enable_cancellation: cancellationData.enable_cancellation,
+            email: cancellationData.email,
+            contract_name: cancellationData.contract_name,
+            contract_number: cancellationData.contract_number
+          }
+        ]
+      };
+
+      console.log('📤 Envoi des données stepcancellation:', stepCancellationData);
+
+      await neolianeService.submitStepCancellation(
+        currentSubscriptionState.subscription_id,
+        currentSubscriptionState.subscription_id,
+        stepCancellationData
+      );
+
+      // Récupérer l'état mis à jour de la souscription
+      const updatedState = await neolianeService.getSubscription(currentSubscriptionState.subscription_id);
+      setCurrentSubscriptionState(prev => ({ ...prev, ...updatedState }));
+
+      // Déterminer la prochaine étape
+      const nextStep = getNextStep(updatedState);
+      setCurrentStep(nextStep);
+
+      toast.success('Informations de résiliation enregistrées avec succès !');
+    } catch (error: any) {
+      console.error('❌ Erreur stepcancellation:', error);
+      const errorMessage = `Erreur lors de la soumission des informations de résiliation: ${error.message}`;
+      onError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Étape 5: Gestion des documents
   const handleDocuments = async () => {
     setLoading(true);
     try {
-      // Simulation de l'upload des documents
       console.log('📄 Traitement des documents...');
       
-      // Récupération des documents pré-remplis
-      if (subscriptionState.subscription_id) {
-        const documentsBlob = await neolianeService.getPrefilledDocuments(subscriptionState.subscription_id);
+      // Récupérer les documents pré-remplis
+      if (currentSubscriptionState.subscription_id) {
+        const documentsBlob = await neolianeService.getPrefilledDocuments(currentSubscriptionState.subscription_id);
         console.log('✅ Documents récupérés:', documentsBlob.size, 'bytes');
       }
 
-      // Simulation de l'upload des documents signés
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Upload des documents signés
+      for (const [docType, base64Content] of Object.entries(uploadedDocuments)) {
+        const documentData = {
+          type: getDocumentTypeId(docType),
+          content: base64Content,
+          contract_ids: currentSubscriptionState.contracts?.map(c => c.id) || []
+        };
+
+        await neolianeService.uploadDocument(currentSubscriptionState.subscription_id!, documentData);
+        console.log(`✅ Document ${docType} uploadé avec succès`);
+      }
       
       // Validation des contrats
-      console.log('✅ Validation des contrats...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      if (currentSubscriptionState.contracts) {
+        for (const contract of currentSubscriptionState.contracts) {
+          await neolianeService.validateContract(contract.id);
+          console.log(`✅ Contrat ${contract.id} validé`);
+        }
+      }
+
       // Mettre à jour le statut en base
       await updateSubscriptionStatus('active');
       
@@ -219,6 +373,35 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
     }
   };
 
+  // Utilitaires
+  const getNextStep = (state: any): string => {
+    if (state.currentstep > state.totalstep) {
+      return 'documents';
+    }
+
+    // Utiliser les informations de l'état pour déterminer la prochaine étape
+    if (state.steps) {
+      const stepKeys = Object.keys(state.steps);
+      const currentStepIndex = state.currentstep - 1;
+      
+      if (currentStepIndex < stepKeys.length) {
+        const nextStepKey = stepKeys[currentStepIndex];
+        return nextStepKey.toLowerCase();
+      }
+    }
+
+    return 'documents';
+  };
+
+  const getDocumentTypeId = (docType: string): number => {
+    switch (docType) {
+      case 'BA': return 2;
+      case 'SEPA': return 3;
+      case 'MANDAT_RESILIATION': return 226;
+      default: return 2;
+    }
+  };
+
   const saveSubscriptionToDatabase = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -228,8 +411,8 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
         .from('subscriptions')
         .insert({
           user_id: user.id,
-          lead_id: subscriptionState.lead_id,
-          subscription_id: subscriptionState.subscription_id,
+          lead_id: currentSubscriptionState.lead_id,
+          subscription_id: currentSubscriptionState.subscription_id,
           product_name: selectedOffre.nom,
           formula_name: selectedOffre.nom,
           monthly_price: selectedOffre.prix,
@@ -246,12 +429,12 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
 
   const updateSubscriptionStatus = async (status: string) => {
     try {
-      if (!subscriptionState.subscription_id) return;
+      if (!currentSubscriptionState.subscription_id) return;
 
       const { error } = await supabase
         .from('subscriptions')
         .update({ status })
-        .eq('subscription_id', subscriptionState.subscription_id);
+        .eq('subscription_id', currentSubscriptionState.subscription_id);
 
       if (error) throw error;
       console.log(`✅ Statut mis à jour: ${status}`);
@@ -262,19 +445,19 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
 
   const handleDownloadDocuments = async () => {
     try {
-      if (!subscriptionState.subscription_id) {
+      if (!currentSubscriptionState.subscription_id) {
         onError('ID de souscription manquant');
         return;
       }
 
-      const documentsBlob = await neolianeService.getPrefilledDocuments(subscriptionState.subscription_id);
+      const documentsBlob = await neolianeService.getPrefilledDocuments(currentSubscriptionState.subscription_id);
       
       // Créer un lien de téléchargement
       const url = window.URL.createObjectURL(documentsBlob);
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      a.download = `documents-neoliane-${subscriptionState.subscription_id}.pdf`;
+      a.download = `documents-neoliane-${currentSubscriptionState.subscription_id}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -311,19 +494,21 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
     const steps = [
       { key: 'stepconcern', label: 'Informations personnelles', icon: User },
       { key: 'stepbank', label: 'Informations bancaires', icon: CreditCard },
+      { key: 'stepfuneral', label: 'Informations obsèques', icon: Shield },
+      { key: 'stepcancellation', label: 'Résiliation', icon: AlertCircle },
       { key: 'documents', label: 'Documents', icon: FileText },
       { key: 'completed', label: 'Terminé', icon: CheckCircle }
     ];
 
     return (
-      <div className="flex justify-between mb-8">
+      <div className="flex justify-between mb-8 overflow-x-auto">
         {steps.map((step, index) => {
           const Icon = step.icon;
           const isActive = step.key === currentStep;
           const isCompleted = steps.findIndex(s => s.key === currentStep) > index;
           
           return (
-            <div key={step.key} className="flex flex-col items-center flex-1">
+            <div key={step.key} className="flex flex-col items-center flex-1 min-w-0">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all ${
                 isActive ? 'bg-blue-600 text-white scale-110' :
                 isCompleted ? 'bg-green-600 text-white' :
@@ -331,7 +516,7 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
               }`}>
                 <Icon size={20} />
               </div>
-              <span className={`text-sm text-center transition-colors ${
+              <span className={`text-xs text-center transition-colors ${
                 isActive ? 'text-blue-600 font-medium' : 
                 isCompleted ? 'text-green-600' : 'text-gray-500'
               }`}>
@@ -677,6 +862,228 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
     </motion.div>
   );
 
+  const renderStepFuneral = () => (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="space-y-8"
+    >
+      <h3 className="text-2xl font-semibold text-gray-900 mb-6">Informations obsèques</h3>
+      
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <p className="text-blue-800 text-sm">
+          Cette étape est spécifique aux contrats obsèques. Veuillez remplir les informations ci-dessous.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Type de pièce d'identité</label>
+          <select
+            value={funeralData.identitytype_id}
+            onChange={(e) => setFuneralData({...funeralData, identitytype_id: e.target.value})}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          >
+            <option value="1">Carte d'identité</option>
+            <option value="2">Passeport</option>
+            <option value="3">Carte de séjour</option>
+            <option value="4">Carte de résident</option>
+            <option value="5">Permis de conduire</option>
+          </select>
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de pièce d'identité *</label>
+          <input
+            type="text"
+            value={funeralData.identitynumber}
+            onChange={(e) => setFuneralData({...funeralData, identitynumber: e.target.value})}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="123456789"
+            required
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Date de délivrance *</label>
+          <input
+            type="date"
+            value={funeralData.issuedate}
+            onChange={(e) => setFuneralData({...funeralData, issuedate: e.target.value})}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Ville de délivrance *</label>
+          <input
+            type="text"
+            value={funeralData.issuecity}
+            onChange={(e) => setFuneralData({...funeralData, issuecity: e.target.value})}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="Paris"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Date d'expiration *</label>
+          <input
+            type="date"
+            value={funeralData.expirationdate}
+            onChange={(e) => setFuneralData({...funeralData, expirationdate: e.target.value})}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            required
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Type de clause</label>
+          <select
+            value={funeralData.enumobsequetypeclause_id}
+            onChange={(e) => setFuneralData({...funeralData, enumobsequetypeclause_id: e.target.value})}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          >
+            <option value="1">Standard (par défaut)</option>
+            <option value="2">Clause libre</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex justify-between">
+        <button
+          onClick={() => setCurrentStep('stepbank')}
+          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Retour
+        </button>
+        <button
+          onClick={handleStepFuneral}
+          disabled={loading}
+          className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+        >
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2 inline-block"></div>
+              Traitement...
+            </>
+          ) : (
+            'Continuer'
+          )}
+        </button>
+      </div>
+    </motion.div>
+  );
+
+  const renderStepCancellation = () => (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="space-y-8"
+    >
+      <h3 className="text-2xl font-semibold text-gray-900 mb-6">Résiliation de votre contrat actuel</h3>
+      
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <p className="text-blue-800 text-sm">
+          Si vous avez déjà un contrat de mutuelle, nous pouvons nous occuper de sa résiliation pour vous.
+        </p>
+      </div>
+
+      <div className="flex items-center mb-4">
+        <input
+          type="checkbox"
+          id="enable_cancellation"
+          checked={cancellationData.enable_cancellation === 1}
+          onChange={(e) => setCancellationData({
+            ...cancellationData,
+            enable_cancellation: e.target.checked ? 1 : 0
+          })}
+          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+        />
+        <label htmlFor="enable_cancellation" className="ml-2 block text-sm text-gray-900">
+          Je souhaite résilier mon contrat actuel
+        </label>
+      </div>
+
+      {cancellationData.enable_cancellation === 1 && (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Email de confirmation *</label>
+            <input
+              type="email"
+              value={cancellationData.email}
+              onChange={(e) => setCancellationData({...cancellationData, email: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              placeholder="votre@email.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nom du contrat actuel *</label>
+            <input
+              type="text"
+              value={cancellationData.contract_name}
+              onChange={(e) => setCancellationData({...cancellationData, contract_name: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              placeholder="Ex: Mutuelle XYZ"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Numéro de contrat actuel *</label>
+            <input
+              type="text"
+              value={cancellationData.contract_number}
+              onChange={(e) => setCancellationData({...cancellationData, contract_number: e.target.value})}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              placeholder="Ex: 123456789"
+              required
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between">
+        <button
+          onClick={() => {
+            // Déterminer l'étape précédente en fonction du flux
+            const prevStep = currentSubscriptionState.steps && 
+                            Object.values(currentSubscriptionState.steps).includes('Stepfuneral') 
+                            ? 'stepfuneral' 
+                            : 'stepbank';
+            setCurrentStep(prevStep);
+          }}
+          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Retour
+        </button>
+        <button
+          onClick={handleStepCancellation}
+          disabled={loading}
+          className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+        >
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2 inline-block"></div>
+              Traitement...
+            </>
+          ) : (
+            'Continuer'
+          )}
+        </button>
+      </div>
+    </motion.div>
+  );
+
   const renderDocuments = () => (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -701,10 +1108,12 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
             <CheckCircle className="text-green-600 mr-2" size={16} />
             <span>Mandat SEPA</span>
           </li>
-          <li className="flex items-center">
-            <CheckCircle className="text-green-600 mr-2" size={16} />
-            <span>Mandat de résiliation (si applicable)</span>
-          </li>
+          {cancellationData.enable_cancellation === 1 && (
+            <li className="flex items-center">
+              <CheckCircle className="text-green-600 mr-2" size={16} />
+              <span>Mandat de résiliation</span>
+            </li>
+          )}
         </ul>
         
         <p className="text-sm text-gray-600 mb-4">
@@ -724,7 +1133,7 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
       <div className="space-y-6">
         <h4 className="text-lg font-medium text-gray-900">Upload des documents signés</h4>
         
-        {['BA', 'SEPA', 'MANDAT_RESILIATION'].map((docType) => (
+        {['BA', 'SEPA', ...(cancellationData.enable_cancellation === 1 ? ['MANDAT_RESILIATION'] : [])].map((docType) => (
           <div key={docType} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h5 className="font-medium text-gray-900">
@@ -760,14 +1169,24 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
 
       <div className="flex justify-between">
         <button
-          onClick={() => setCurrentStep('stepbank')}
+          onClick={() => {
+            // Déterminer l'étape précédente en fonction du flux
+            const prevStep = currentSubscriptionState.steps && 
+                            Object.values(currentSubscriptionState.steps).includes('Stepcancellation') 
+                            ? 'stepcancellation' 
+                            : currentSubscriptionState.steps && 
+                              Object.values(currentSubscriptionState.steps).includes('Stepfuneral')
+                              ? 'stepfuneral'
+                              : 'stepbank';
+            setCurrentStep(prevStep);
+          }}
           className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
         >
           Retour
         </button>
         <button
           onClick={handleDocuments}
-          disabled={loading}
+          disabled={loading || Object.keys(uploadedDocuments).length === 0}
           className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           {loading ? (
@@ -806,7 +1225,7 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
         <div className="space-y-2 text-sm">
           <p><strong>Formule :</strong> {selectedOffre.nom}</p>
           <p><strong>Prix :</strong> {selectedOffre.prix}€ / mois</p>
-          <p><strong>ID de souscription :</strong> {subscriptionState.subscription_id}</p>
+          <p><strong>ID de souscription :</strong> {currentSubscriptionState.subscription_id}</p>
         </div>
       </div>
 
@@ -814,7 +1233,7 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
         onClick={onComplete}
         className="px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all duration-300 transform hover:scale-105"
       >
-        Retour à l'accueil
+        Accéder à mon espace client
       </button>
     </motion.div>
   );
@@ -826,6 +1245,8 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({
         
         {currentStep === 'stepconcern' && renderStepConcern()}
         {currentStep === 'stepbank' && renderStepBank()}
+        {currentStep === 'stepfuneral' && renderStepFuneral()}
+        {currentStep === 'stepcancellation' && renderStepCancellation()}
         {currentStep === 'documents' && renderDocuments()}
         {currentStep === 'completed' && renderCompleted()}
       </div>

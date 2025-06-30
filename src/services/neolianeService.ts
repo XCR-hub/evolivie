@@ -87,6 +87,52 @@ export interface StepBankRequest {
   }>;
 }
 
+export interface StepFuneralRequest {
+  details: Array<{
+    identity: {
+      identitytype_id: string;
+      identitynumber: string;
+      issuedate: string;
+      issuecity: string;
+      expirationdate: string;
+      birthcountry: string;
+      birthcity: string;
+      birthzipcode: string;
+      fiscalresident: string;
+    };
+    enumobsequetypeclause_id: string;
+    beneficiarynumber?: string;
+    beneficiaries?: Array<{
+      gender: string;
+      firstname: string;
+      lastname: string;
+      birthname: string;
+      birthdate: string;
+      birthcity: string;
+      streetnumber: string;
+      street: string;
+      streetbis: string;
+      zipcode: string;
+      city: string;
+      rank: string;
+      percentage: string;
+    }>;
+  }>;
+}
+
+export interface StepCancellationRequest {
+  disable_cancellations: number;
+  details: Array<{
+    enable_cancellation: number;
+    email?: string;
+    reasonId?: string;
+    company?: string;
+    contract_name?: string;
+    contract_number?: string;
+    old_contract_date_echeance?: string;
+  }>;
+}
+
 // Interfaces pour l'API Editique
 export interface Product {
   gammeId: number;
@@ -142,7 +188,7 @@ export interface TarificationResponse {
 }
 
 export interface SubscriptionFlowState {
-  step: 'cart' | 'subscription' | 'stepconcern' | 'stepbank' | 'documents' | 'validation' | 'completed';
+  step: 'cart' | 'subscription' | 'stepconcern' | 'stepbank' | 'stepfuneral' | 'stepcancellation' | 'documents' | 'validation' | 'completed';
   lead_id?: string;
   subscription_id?: string;
   token?: string;
@@ -150,6 +196,10 @@ export interface SubscriptionFlowState {
   required_docs?: any[];
   currentstep?: number;
   totalstep?: number;
+  steps?: { [key: string]: string };
+  form?: any;
+  save?: any;
+  validate?: any;
 }
 
 class NeolianeService {
@@ -162,7 +212,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy Vite - Version 4.0');
+    console.log('🔧 Service Neoliane initialisé avec proxy Vite - Version 5.0');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
@@ -199,7 +249,7 @@ class NeolianeService {
     }
   }
 
-  // Authentification avec gestion automatique du token
+  // Authentification avec gestion automatique du token (valide 1h)
   public async authenticate(): Promise<string> {
     // Vérifier si le token est encore valide (avec une marge de 5 minutes)
     if (this.accessToken && Date.now() < (this.tokenExpiry - 300000)) {
@@ -222,16 +272,10 @@ class NeolianeService {
 
       if (response.access_token) {
         this.accessToken = response.access_token;
-        // expires_in peut être soit un timestamp Unix soit une durée en secondes
-        if (response.expires_in > 1000000000) {
-          // C'est un timestamp Unix
-          this.tokenExpiry = response.expires_in * 1000;
-        } else {
-          // C'est une durée en secondes
-          this.tokenExpiry = Date.now() + (response.expires_in * 1000);
-        }
+        // expires_in est un timestamp Unix selon la documentation
+        this.tokenExpiry = response.expires_in * 1000;
         
-        console.log('✅ Authentification réussie, token valide jusqu\'à:', new Date(this.tokenExpiry));
+        console.log('✅ Authentification réussie, token valide 1h jusqu\'à:', new Date(this.tokenExpiry));
         return this.accessToken;
       } else {
         throw new Error('Token d\'accès non reçu');
@@ -257,12 +301,10 @@ class NeolianeService {
       if (response && response.status && response.value) {
         // Vérifier si response.value est un objet ou un tableau
         if (Array.isArray(response.value)) {
-          // C'est déjà un tableau, on peut le retourner directement
           console.log(`✅ ${response.value.length} produits récupérés depuis l'API Neoliane`);
           return response.value;
         } else if (typeof response.value === 'object' && response.value !== null) {
           // C'est un objet, on doit extraire les produits
-          // Essayons de trouver un tableau dans les propriétés de l'objet
           for (const key in response.value) {
             if (Array.isArray(response.value[key])) {
               console.log(`✅ ${response.value[key].length} produits trouvés dans la propriété ${key}`);
@@ -279,7 +321,6 @@ class NeolianeService {
         }
       }
       
-      // Si on arrive ici, on n'a pas pu extraire de produits
       console.log('⚠️ Aucun produit trouvé dans la réponse API');
       return [];
     } catch (error) {
@@ -352,7 +393,9 @@ class NeolianeService {
     }
   }
 
-  // Créer un panier
+  // === TUNNEL DE SOUSCRIPTION COMPLET ===
+
+  // Étape 1: Créer un panier
   public async createCart(cartData: CartRequest): Promise<any> {
     try {
       console.log('🛒 Création du panier...');
@@ -377,7 +420,7 @@ class NeolianeService {
     }
   }
 
-  // Créer une souscription
+  // Étape 2: Créer une souscription
   public async createSubscription(subscriptionData: SubscriptionRequest): Promise<any> {
     try {
       console.log('📝 Création de la souscription...');
@@ -402,7 +445,7 @@ class NeolianeService {
     }
   }
 
-  // Soumettre les informations des adhérents (stepconcern)
+  // Étape 3: Soumettre les informations des adhérents (stepconcern)
   public async submitStepConcern(subId: string, stepId: string, concernData: StepConcernRequest): Promise<any> {
     try {
       console.log('👥 Soumission des informations adhérents...');
@@ -427,7 +470,29 @@ class NeolianeService {
     }
   }
 
-  // Soumettre les informations bancaires (stepbank)
+  // Récupération de l'état d'une souscription
+  public async getSubscription(subId: string): Promise<any> {
+    try {
+      console.log('📋 Récupération de l\'état de la souscription...');
+      const token = await this.authenticate();
+      const response = await this.makeRequest(`/nws/public/v1/api/subscription/${subId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.status && response.value) {
+        console.log('✅ État de la souscription récupéré avec succès');
+        return response.value;
+      }
+      throw new Error('Erreur lors de la récupération de la souscription');
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération de la souscription:', error);
+      throw error;
+    }
+  }
+
+  // Étape 4: Soumettre les informations bancaires (stepbank)
   public async submitStepBank(subId: string, stepId: string, bankData: StepBankRequest): Promise<any> {
     try {
       console.log('🏦 Soumission des informations bancaires...');
@@ -452,29 +517,57 @@ class NeolianeService {
     }
   }
 
-  // Récupérer l'état d'une souscription
-  public async getSubscription(subId: string): Promise<any> {
+  // Étape 5: Informations obsèques (stepfuneral) - uniquement pour les contrats obsèques
+  public async submitStepFuneral(subId: string, stepId: string, funeralData: StepFuneralRequest): Promise<any> {
     try {
-      console.log('📋 Récupération de l\'état de la souscription...');
+      console.log('⚱️ Soumission des informations obsèques...');
+      console.log('📤 Données stepfuneral:', JSON.stringify(funeralData, null, 2));
       const token = await this.authenticate();
-      const response = await this.makeRequest(`/nws/public/v1/api/subscription/${subId}`, {
+      const response = await this.makeRequest(`/nws/public/v1/api/subscription/${subId}/stepfuneral/${stepId}`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify(funeralData)
       });
 
       if (response.status && response.value) {
-        console.log('✅ État de la souscription récupéré avec succès');
+        console.log('✅ Informations obsèques soumises avec succès');
         return response.value;
       }
-      throw new Error('Erreur lors de la récupération de la souscription');
+      throw new Error('Erreur lors de la soumission des informations obsèques');
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération de la souscription:', error);
+      console.error('❌ Erreur stepfuneral:', error);
       throw error;
     }
   }
 
-  // Upload d'un document
+  // Étape 6: Gestion de la résiliation (stepcancellation)
+  public async submitStepCancellation(subId: string, stepId: string, cancellationData: StepCancellationRequest): Promise<any> {
+    try {
+      console.log('📋 Soumission des informations de résiliation...');
+      console.log('📤 Données stepcancellation:', JSON.stringify(cancellationData, null, 2));
+      const token = await this.authenticate();
+      const response = await this.makeRequest(`/nws/public/v1/api/subscription/${subId}/stepcancellation/${stepId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(cancellationData)
+      });
+
+      if (response.status && response.value) {
+        console.log('✅ Informations de résiliation soumises avec succès');
+        return response.value;
+      }
+      throw new Error('Erreur lors de la soumission des informations de résiliation');
+    } catch (error) {
+      console.error('❌ Erreur stepcancellation:', error);
+      throw error;
+    }
+  }
+
+  // Étape 7: Upload d'un document
   public async uploadDocument(subId: string, documentData: any): Promise<any> {
     try {
       console.log('📄 Upload de document...');
@@ -498,7 +591,7 @@ class NeolianeService {
     }
   }
 
-  // Valider un contrat
+  // Étape 8: Valider un contrat
   public async validateContract(contractId: string): Promise<any> {
     try {
       console.log('✅ Validation du contrat...');
@@ -788,7 +881,7 @@ class NeolianeService {
     ];
 
     const offres: Offre[] = formules.map(formule => {
-      const prixFinal = this.calculatePriceWithBeneficiaries(
+      const prixFinal = this.calculatePriceWithBeneficiaires(
         basePrice * formule.multiplier,
         request.conjoint,
         request.enfants
@@ -999,7 +1092,11 @@ class NeolianeService {
         subscription_id: subscriptionResult.id,
         token: cartResult.token,
         currentstep: subscriptionResult.currentstep,
-        totalstep: subscriptionResult.totalstep
+        totalstep: subscriptionResult.totalstep,
+        steps: subscriptionResult.steps,
+        form: subscriptionResult.form,
+        save: subscriptionResult.save,
+        validate: subscriptionResult.validate
       };
 
     } catch (error) {
@@ -1068,13 +1165,13 @@ class NeolianeService {
     };
   }
 
-  // Méthode pour tester l'authentification
+  // Méthode pour tester l'authentification (cœur qui bat)
   public async testAuthentication(): Promise<boolean> {
     try {
-      console.log('🧪 Test d\'authentification...');
+      console.log('💓 Test d\'authentification (cœur qui bat)...');
       const token = await this.authenticate();
       const isAuthenticated = !!token;
-      console.log(`🧪 Résultat du test: ${isAuthenticated ? 'Succès' : 'Échec'}`);
+      console.log(`💓 Résultat du test: ${isAuthenticated ? 'Succès' : 'Échec'}`);
       return isAuthenticated;
     } catch (error) {
       console.error('❌ Test d\'authentification échoué:', error);

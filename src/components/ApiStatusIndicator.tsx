@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, Settings, AlertCircle } from 'lucide-react';
+import { Heart, Settings, AlertCircle, CheckCircle } from 'lucide-react';
 import { neolianeService } from '../services/neolianeService';
 import { toast } from 'react-toastify';
 
