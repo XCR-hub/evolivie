@@ -162,7 +162,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec clés intégrées - Version 4.0');
+    console.log('🔧 Service Neoliane initialisé avec proxy Vite - Version 4.0');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
