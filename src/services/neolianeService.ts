@@ -855,25 +855,75 @@ class NeolianeService {
 
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
-      // Étape 1: Créer le panier
-      const cartData: CartRequest = {
-        total_amount: selectedOffre.prix.toString(),
-        profile: {
-          date_effect: dateEffect,
-          zipcode: request.codePostal,
-          members: [
+      // Construire la liste des membres (adhérent principal + bénéficiaires)
+      const members: Array<{
+        concern: string;
+        birthyear: string;
+        regime: string;
+        products: Array<{
+          product_id: string;
+          formula_id: string;
+        }>;
+      }> = [];
+
+      // Adhérent principal
+      members.push({
+        concern: 'a1', // Adhérent principal
+        birthyear: request.anneeNaissance.toString(),
+        regime: this.mapRegimeToApiValue(request.regime),
+        products: [
+          {
+            product_id: selectedOffre.product_id || '538',
+            formula_id: selectedOffre.formula_id || '3847'
+          }
+        ]
+      });
+
+      // Ajouter le conjoint s'il existe
+      if (request.conjoint && request.conjoint.anneeNaissance) {
+        console.log('👫 Ajout du conjoint au panier');
+        members.push({
+          concern: 'c1', // Conjoint
+          birthyear: request.conjoint.anneeNaissance.toString(),
+          regime: this.mapRegimeToApiValue(request.conjoint.regime),
+          products: [
             {
-              concern: 'a1',
-              birthyear: request.anneeNaissance.toString(),
-              regime: this.mapRegimeToApiValue(request.regime),
+              product_id: selectedOffre.product_id || '538',
+              formula_id: selectedOffre.formula_id || '3847'
+            }
+          ]
+        });
+      }
+
+      // Ajouter les enfants s'ils existent
+      if (request.enfants && request.enfants.length > 0) {
+        console.log(`👶 Ajout de ${request.enfants.length} enfant(s) au panier`);
+        request.enfants.forEach((enfant, index) => {
+          if (enfant.anneeNaissance) {
+            members.push({
+              concern: `e${index + 1}`, // e1, e2, e3, etc.
+              birthyear: enfant.anneeNaissance.toString(),
+              regime: '6', // Étudiant par défaut pour les enfants
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
                   formula_id: selectedOffre.formula_id || '3847'
                 }
               ]
-            }
-          ]
+            });
+          }
+        });
+      }
+
+      console.log(`👥 ${members.length} membre(s) ajouté(s) au panier:`, members);
+
+      // Étape 1: Créer le panier avec tous les membres
+      const cartData: CartRequest = {
+        total_amount: selectedOffre.prix.toString(),
+        profile: {
+          date_effect: dateEffect,
+          zipcode: request.codePostal,
+          members: members
         }
       };
 
