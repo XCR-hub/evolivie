@@ -1,4 +1,4 @@
-// Service pour gérer les appels à l'API Neoliane - Version complète avec clés intégrées
+// Service pour gérer les appels à l'API Neoliane via le proxy Vite
 export interface TarificationRequest {
   dateEffet: string;
   codePostal: string;
@@ -75,9 +75,19 @@ export interface StepBankRequest {
     iban: string;
     bic: string;
     isDifferentFromStepConcern: string;
+    gender?: string;
+    lastname?: string;
+    firstname?: string;
+    streetnumber?: string;
+    street?: string;
+    streetbis?: string;
+    zipcode?: string;
+    city?: string;
+    country?: string;
   }>;
 }
 
+// Interfaces pour l'API Editique
 export interface Product {
   gammeId: number;
   gammeLabel: string | null;
@@ -103,6 +113,12 @@ export interface ProductDocument {
   fileExtension: string | null;
   pages: string | null;
   label: string | null;
+}
+
+export interface ApiResponse<T> {
+  status: boolean;
+  error?: string | null;
+  value: T;
 }
 
 export interface Offre {
@@ -146,8 +162,8 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec clés intégrées - Version 3.0');
-    console.log('🔑 Clés API pré-configurées et prêtes à l\'emploi');
+    console.log('🔧 Service Neoliane initialisé avec clés intégrées - Version 4.0');
+    console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
   // Méthode pour faire des requêtes via le proxy Vite
@@ -169,6 +185,8 @@ class NeolianeService {
       console.log(`📡 Réponse: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Réponse d\'erreur:', errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -224,17 +242,6 @@ class NeolianeService {
     }
   }
 
-  // Vérifier le statut de l'API (cœur qui bat)
-  public async checkApiStatus(): Promise<boolean> {
-    try {
-      await this.authenticate();
-      return true;
-    } catch (error) {
-      console.error('❌ API non disponible:', error);
-      return false;
-    }
-  }
-
   // Récupérer la liste des produits RÉELS depuis l'API Neoliane
   public async getProducts(): Promise<Product[]> {
     try {
@@ -281,7 +288,7 @@ class NeolianeService {
   }
 
   // Télécharger un document
-  public async downloadDocument(gammeId: number, documentId: number): Promise<string> {
+  public async downloadDocument(gammeId: number, documentId: number, filename: string): Promise<void> {
     try {
       console.log(`📄 Téléchargement du document ${documentId}...`);
       const token = await this.authenticate();
@@ -293,9 +300,29 @@ class NeolianeService {
 
       if (response.status && response.value) {
         console.log('✅ Document téléchargé avec succès');
-        return response.value; // Base64 content
+        
+        // Convertir le base64 en blob
+        const byteCharacters = atob(response.value);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        
+        // Créer un lien de téléchargement
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        throw new Error('Document non trouvé');
       }
-      throw new Error('Document non trouvé');
     } catch (error) {
       console.error('❌ Erreur lors du téléchargement du document:', error);
       throw error;
@@ -500,6 +527,13 @@ class NeolianeService {
     try {
       console.log('💰 Récupération des offres RÉELLES depuis l\'API Neoliane...');
       console.log('📋 Paramètres:', request);
+
+      // Vérifier le format de la date
+      try {
+        this.formatDateEffect(request.dateEffet);
+      } catch (error: any) {
+        throw new Error(`Erreur de date: ${error.message}`);
+      }
 
       // ÉTAPE 1: Récupérer la liste RÉELLE des produits depuis l'API Neoliane
       console.log('📦 Récupération de la liste des produits depuis l\'API...');
@@ -731,7 +765,7 @@ class NeolianeService {
     ];
 
     const offres: Offre[] = formules.map(formule => {
-      const prixFinal = this.calculatePriceWithBeneficiaires(
+      const prixFinal = this.calculatePriceWithBeneficiaries(
         basePrice * formule.multiplier,
         request.conjoint,
         request.enfants
@@ -754,8 +788,8 @@ class NeolianeService {
     };
   }
 
-  // Méthode pour calculer le prix en fonction des bénéficiaires - CONVERTED TO ARROW FUNCTION
-  private calculatePriceWithBeneficiaries = (basePrice: number, conjoint?: any, enfants?: any[]): number => {
+  // Méthode pour calculer le prix en fonction des bénéficiaires
+  private calculatePriceWithBeneficiaries(basePrice: number, conjoint?: any, enfants?: any[]): number {
     let totalPrice = basePrice;
 
     // Ajouter le prix pour le conjoint (généralement 80% du prix principal)
@@ -793,8 +827,7 @@ class NeolianeService {
     return totalPrice;
   }
 
-  // CONVERTED TO ARROW FUNCTION
-  private calculateBasePrice = (age: number, regime: string): number => {
+  private calculateBasePrice(age: number, regime: string): number {
     let basePrice = 45; // Prix de base
 
     // Ajustement selon l'âge
@@ -832,8 +865,50 @@ class NeolianeService {
     return basePrice;
   }
 
-  // Méthode pour calculer le prix en fonction des bénéficiaires - ALIAS FOR COMPATIBILITY
-  private calculatePriceWithBeneficiaires = this.calculatePriceWithBeneficiaries;
+  // Utilitaire pour formater la date d'effet au format attendu par l'API
+  private formatDateEffect(dateString: string): { year: number; month: number; day: number } {
+    console.log(`📅 Formatage de la date: "${dateString}"`);
+    
+    // Vérifie si la date est au format YYYY-MM-DD
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateString)) {
+      throw new Error("Format de date invalide. Utilisez le format YYYY-MM-DD");
+    }
+
+    const [yearStr, monthStr, dayStr] = dateString.split('-');
+    
+    // Conversion en nombres (IMPORTANT: l'API Neoliane attend des nombres, pas des strings)
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+
+    // Validation des valeurs
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      throw new Error("Date invalide: impossible de convertir en nombres");
+    }
+
+    if (month < 1 || month > 12) {
+      throw new Error("Mois invalide: doit être entre 1 et 12");
+    }
+
+    if (day < 1 || day > 31) {
+      throw new Error("Jour invalide: doit être entre 1 et 31");
+    }
+
+    // Vérifie si la date est dans le futur
+    const effetDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (effetDate <= today) {
+      throw new Error("La date d'effet doit être postérieure à aujourd'hui");
+    }
+
+    const result = { year, month, day };
+    console.log(`📅 Date formatée avec succès:`, result);
+    
+    return result;
+  }
 
   // Méthode pour démarrer le processus de souscription complet
   public async startSubscriptionFlow(
@@ -846,88 +921,43 @@ class NeolianeService {
       console.log('📋 Paramètres de la demande:', request);
 
       // Formater la date d'effet au format attendu par l'API
-      const [year, month, day] = request.dateEffet.split('-');
-      const dateEffect = {
-        year: parseInt(year),
-        month: parseInt(month),
-        day: parseInt(day)
-      };
-
+      const dateEffect = this.formatDateEffect(request.dateEffet);
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
-      // Construire la liste des membres (adhérent principal + bénéficiaires)
-      const members: Array<{
-        concern: string;
-        birthyear: string;
-        regime: string;
-        products: Array<{
-          product_id: string;
-          formula_id: string;
-        }>;
-      }> = [];
-
-      // Adhérent principal
-      members.push({
-        concern: 'a1', // Adhérent principal
-        birthyear: request.anneeNaissance.toString(),
-        regime: this.mapRegimeToApiValue(request.regime),
-        products: [
-          {
-            product_id: selectedOffre.product_id || '538',
-            formula_id: selectedOffre.formula_id || '3847'
-          }
-        ]
-      });
-
-      // Ajouter le conjoint s'il existe
-      if (request.conjoint && request.conjoint.anneeNaissance) {
-        console.log('👫 Ajout du conjoint au panier');
-        members.push({
-          concern: 'c1', // Conjoint
-          birthyear: request.conjoint.anneeNaissance.toString(),
-          regime: this.mapRegimeToApiValue(request.conjoint.regime),
-          products: [
-            {
-              product_id: selectedOffre.product_id || '538',
-              formula_id: selectedOffre.formula_id || '3847'
-            }
-          ]
-        });
+      // Utiliser le formula_id de l'offre (qui vient maintenant de l'API réelle)
+      const formulaId = selectedOffre.formula_id || selectedOffre.formulaId?.toString();
+      
+      if (!formulaId) {
+        throw new Error('Aucun ID de formule disponible pour cette offre');
       }
+      
+      console.log(`🧮 Utilisation de la formule: ${formulaId} pour le produit ${selectedOffre.product_id}`);
 
-      // Ajouter les enfants s'ils existent
-      if (request.enfants && request.enfants.length > 0) {
-        console.log(`👶 Ajout de ${request.enfants.length} enfant(s) au panier`);
-        request.enfants.forEach((enfant, index) => {
-          if (enfant.anneeNaissance) {
-            members.push({
-              concern: `e${index + 1}`, // e1, e2, e3, etc.
-              birthyear: enfant.anneeNaissance.toString(),
-              regime: '6', // Étudiant par défaut pour les enfants
-              products: [
-                {
-                  product_id: selectedOffre.product_id || '538',
-                  formula_id: selectedOffre.formula_id || '3847'
-                }
-              ]
-            });
-          }
-        });
-      }
-
-      console.log(`👥 ${members.length} membre(s) ajouté(s) au panier:`, members);
-
-      // Étape 1: Créer le panier avec tous les membres
+      // Étape 1: Créer le panier
       const cartData: CartRequest = {
         total_amount: selectedOffre.prix.toString(),
         profile: {
-          date_effect: dateEffect,
+          date_effect: dateEffect, // Objet avec year, month, day en NOMBRES
           zipcode: request.codePostal,
-          members: members
+          members: [
+            {
+              concern: 'a1',
+              birthyear: request.anneeNaissance.toString(),
+              regime: this.mapRegimeToApiValue(request.regime),
+              products: [
+                {
+                  product_id: selectedOffre.product_id || '538',
+                  formula_id: formulaId
+                }
+              ]
+            }
+          ]
         }
       };
 
       console.log('🛒 Création du panier avec les données:', JSON.stringify(cartData, null, 2));
+      console.log("📅 Date formatée envoyée à l'API:", cartData.profile.date_effect);
+      
       const cartResult = await this.createCart(cartData);
 
       // Étape 2: Créer la souscription
@@ -955,8 +985,8 @@ class NeolianeService {
     }
   }
 
-  // Mapping des régimes selon les valeurs exactes de l'API Neoliane
-  public mapRegimeToApiValue(regime: string): string {
+  // Mapping des régimes selon les valeurs exactes de l'API Neoliane (documentation)
+  private mapRegimeToApiValue(regime: string): string {
     const regimeMap: { [key: string]: string } = {
       'Salarié': '1',
       'TNS Indépendant': '2',
@@ -1006,11 +1036,11 @@ class NeolianeService {
     return mappedValue || '11'; // Salarié par défaut
   }
 
-  // Méthodes de configuration et statut
+  // Méthodes de configuration (simplifiées car la clé est intégrée)
   public getAuthStatus(): { isDemo: boolean; hasUserKey: boolean; hasToken: boolean } {
     return {
       isDemo: false,
-      hasUserKey: true, // Toujours true car les clés sont intégrées
+      hasUserKey: true, // Toujours true car la clé est intégrée
       hasToken: !!this.accessToken && Date.now() < (this.tokenExpiry - 300000) // 5 minutes de marge
     };
   }

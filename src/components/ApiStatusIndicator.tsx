@@ -1,77 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, AlertCircle, Wifi, WifiOff } from 'lucide-react';
-import { neolianeApiService } from '../services/neolianeApiService';
+import { Heart, Settings, AlertCircle } from 'lucide-react';
+import { neolianeService } from '../services/neolianeService';
+import { toast } from 'react-toastify';
 
-const ApiStatusIndicator: React.FC = () => {
+interface ApiStatusIndicatorProps {
+  onClick?: () => void;
+}
+
+const ApiStatusIndicator: React.FC<ApiStatusIndicatorProps> = ({ onClick }) => {
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
   const [lastCheck, setLastCheck] = useState<Date>(new Date());
 
   useEffect(() => {
     const checkApiStatus = async () => {
+      if (isChecking) return;
+      
+      setIsChecking(true);
       try {
-        const status = await neolianeApiService.checkApiStatus();
+        const status = await neolianeService.testAuthentication();
         setIsConnected(status);
         setLastCheck(new Date());
       } catch (error) {
+        console.error('Erreur lors de la vérification du statut API:', error);
         setIsConnected(false);
-        setLastCheck(new Date());
+      } finally {
+        setIsChecking(false);
       }
     };
 
     // Vérification initiale
     checkApiStatus();
 
-    // Vérification toutes les 30 secondes
-    const interval = setInterval(checkApiStatus, 30000);
+    // Vérification toutes les 60 secondes
+    const interval = setInterval(checkApiStatus, 60000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isChecking]);
 
-  const getStatusColor = () => {
-    if (isConnected === null) return 'text-gray-400';
-    return isConnected ? 'text-green-500' : 'text-red-500';
-  };
-
-  const getStatusText = () => {
-    if (isConnected === null) return 'Vérification...';
-    return isConnected ? 'API Connectée' : 'API Déconnectée';
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      // Si aucun gestionnaire de clic n'est fourni, afficher un toast avec le statut
+      if (isConnected) {
+        toast.success('API Neoliane connectée et fonctionnelle');
+      } else {
+        toast.error('API Neoliane non disponible. Vérifiez votre connexion internet.');
+      }
+    }
   };
 
   return (
-    <div className="flex items-center space-x-2 p-2 rounded-lg bg-white shadow-sm border">
-      <motion.div
-        animate={isConnected ? {
-          scale: [1, 1.2, 1],
-          opacity: [0.8, 1, 0.8]
-        } : {
-          scale: [1, 1.1, 1],
-          opacity: [0.7, 1, 0.7]
-        }}
-        transition={{
-          duration: isConnected ? 2 : 1.5,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      >
-        {isConnected === null ? (
-          <Wifi className="text-gray-400" size={20} />
-        ) : isConnected ? (
-          <Heart className={getStatusColor()} size={20} fill="currentColor" />
-        ) : (
-          <WifiOff className={getStatusColor()} size={20} />
-        )}
-      </motion.div>
-      
-      <div className="text-sm">
-        <div className={`font-medium ${getStatusColor()}`}>
-          {getStatusText()}
-        </div>
-        <div className="text-xs text-gray-500">
-          {lastCheck.toLocaleTimeString()}
-        </div>
-      </div>
-    </div>
+    <motion.button
+      onClick={handleClick}
+      className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+      title={isConnected ? "API Neoliane opérationnelle" : "Problème avec l'API Neoliane"}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      {isChecking ? (
+        <motion.div
+          animate={{ 
+            rotate: 360 
+          }}
+          transition={{ 
+            duration: 1,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+        >
+          <Settings className="text-blue-500" size={20} />
+        </motion.div>
+      ) : isConnected ? (
+        <motion.div
+          animate={{ 
+            scale: [1, 1.2, 1],
+            opacity: [0.8, 1, 0.8]
+          }}
+          transition={{ 
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        >
+          <Heart className="text-green-500" size={20} fill="currentColor" />
+        </motion.div>
+      ) : (
+        <motion.div
+          animate={{ 
+            scale: [1, 1.1, 1],
+            opacity: [0.7, 1, 0.7]
+          }}
+          transition={{ 
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        >
+          <Heart className="text-red-500" size={20} fill="currentColor" />
+        </motion.div>
+      )}
+    </motion.button>
   );
 };
 
