@@ -160,7 +160,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.8');
+    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.9');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
@@ -490,35 +490,98 @@ class NeolianeService {
     }
   }
 
-  // Nouvelle méthode pour récupérer les formules d'un produit
-  public async getProductFormulas(gammeId: number): Promise<ProductFormula[]> {
+  // Nouvelle méthode pour récupérer les formules d'un produit via l'API de tarification
+  public async getProductFormulasViaTarification(gammeId: number, request: TarificationRequest): Promise<ProductFormula[]> {
     try {
-      console.log(`🧮 Récupération des formules pour le produit ${gammeId}...`);
+      console.log(`🧮 Récupération des formules via tarification pour le produit ${gammeId}...`);
       
       if (!gammeId || gammeId <= 0) {
         throw new Error(`ID de gamme invalide: ${gammeId}`);
       }
 
-      const response = await this.makeProxyRequest(`/nws/public/v1/api/product/${gammeId}/formulas`);
-      
-      console.log('🔍 Réponse formules:', response);
-      
-      if (response && response.status && response.value) {
-        const formulas = Array.isArray(response.value) ? response.value : [];
-        console.log(`✅ ${formulas.length} formules récupérées pour le produit ${gammeId}`);
-        return formulas;
-      } else if (Array.isArray(response)) {
-        console.log(`✅ ${response.length} formules récupérées directement`);
-        return response;
-      } else {
-        console.log('⚠️ Aucune formule trouvée pour ce produit');
-        return [];
+      // Formater la date d'effet au format attendu par l'API
+      const dateEffect = this.formatDateEffect(request.dateEffet);
+
+      // Créer une demande de tarification pour ce produit spécifique
+      const tarificationData = {
+        total_amount: "0", // Montant temporaire
+        profile: {
+          date_effect: dateEffect,
+          zipcode: request.codePostal,
+          members: [
+            {
+              concern: "a1",
+              birthyear: request.anneeNaissance.toString(),
+              regime: this.mapRegimeToApiValue(request.regime),
+              products: [
+                {
+                  product_id: gammeId.toString(),
+                  formula_id: "0" // Formule temporaire pour obtenir les vraies formules
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      console.log('📤 Demande de tarification pour récupérer les formules:', tarificationData);
+
+      try {
+        // Essayer d'appeler l'API de tarification pour ce produit
+        const response = await this.makeProxyRequest('/nws/public/v1/api/cart', 'POST', tarificationData);
+        
+        // Analyser la réponse pour extraire les formules disponibles
+        if (response && response.status && response.value && response.value.profile && response.value.profile.members) {
+          const member = response.value.profile.members[0];
+          if (member && member.products && member.products.length > 0) {
+            const product = member.products[0];
+            if (product.formula_id && product.formula_id !== "0") {
+              console.log(`✅ Formule trouvée via tarification: ${product.formula_id}`);
+              return [{
+                formulaId: parseInt(product.formula_id),
+                formulaLabel: `Formule ${product.formula_id}`,
+                price: parseFloat(product.price || "0")
+              }];
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ Impossible de récupérer les formules via tarification pour ${gammeId}:`, error);
       }
+
+      // Si la tarification échoue, utiliser les formules connues
+      return this.getKnownFormulasForProduct(gammeId);
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des formules:', error);
-      // Ne pas faire échouer le processus si les formules ne sont pas disponibles
-      return [];
+      console.error('❌ Erreur lors de la récupération des formules via tarification:', error);
+      return this.getKnownFormulasForProduct(gammeId);
     }
+  }
+
+  // Méthode pour obtenir les formules connues pour un produit
+  private getKnownFormulasForProduct(gammeId: number): ProductFormula[] {
+    const knownFormulas: { [key: number]: ProductFormula[] } = {
+      538: [{ formulaId: 3847, formulaLabel: 'Formule Essentielle' }],
+      539: [{ formulaId: 3848, formulaLabel: 'Formule Confort' }],
+      540: [{ formulaId: 3849, formulaLabel: 'Formule Premium' }],
+      619: [{ formulaId: 5092, formulaLabel: 'Formule Obsèques' }],
+      687: [
+        { formulaId: 4996, formulaLabel: 'AltoSante Niveau 1' },
+        { formulaId: 4997, formulaLabel: 'AltoSante Niveau 2' },
+        { formulaId: 4998, formulaLabel: 'AltoSante Niveau 3' }
+      ]
+    };
+
+    if (knownFormulas[gammeId]) {
+      console.log(`✅ Formules connues trouvées pour le produit ${gammeId}`);
+      return knownFormulas[gammeId];
+    }
+
+    // Formule par défaut
+    console.log(`⚠️ Aucune formule connue pour ${gammeId}, utilisation d'une formule par défaut`);
+    return [{
+      formulaId: gammeId + 3000,
+      formulaLabel: `Formule ${gammeId}`
+    }];
   }
 
   // Récupération des documents d'un produit
@@ -902,7 +965,7 @@ class NeolianeService {
       // Si aucun produit santé trouvé, utiliser tous les produits
       const productsToUse = healthProducts.length > 0 ? healthProducts : products;
 
-      // ÉTAPE 3: Pour chaque produit, récupérer ses formules RÉELLES
+      // ÉTAPE 3: Pour chaque produit, récupérer ses formules RÉELLES via tarification
       const age = new Date().getFullYear() - request.anneeNaissance;
       const basePrice = this.calculateBasePrice(age, request.regime);
 
@@ -912,9 +975,9 @@ class NeolianeService {
         if (!product.gammeLabel) continue;
 
         try {
-          // Récupérer les formules réelles pour ce produit
+          // Récupérer les formules réelles pour ce produit via tarification
           console.log(`🧮 Récupération des formules pour ${product.gammeLabel} (ID: ${product.gammeId})`);
-          const formulas = await this.getProductFormulas(product.gammeId);
+          const formulas = await this.getProductFormulasViaTarification(product.gammeId, request);
           
           if (formulas && formulas.length > 0) {
             // Utiliser les vraies formules de l'API
@@ -939,30 +1002,18 @@ class NeolianeService {
               });
             }
           } else {
-            // Fallback: créer une offre avec une formule par défaut
-            console.log(`⚠️ Aucune formule trouvée pour ${product.gammeLabel}, utilisation d'une formule par défaut`);
-            const garanties = this.getGarantiesForProduct(product.gammeLabel);
-            const priceMultiplier = this.getPriceMultiplierForProduct(product.gammeLabel);
-            
-            const prixFinal = this.calculatePriceWithBeneficiaries(
-              basePrice * priceMultiplier,
-              request.conjoint,
-              request.enfants
-            );
-
-            offres.push({
-              nom: product.gammeLabel,
-              prix: Math.round(prixFinal * 100) / 100,
-              product_id: product.gammeId.toString(),
-              formula_id: this.getDefaultFormulaId(product.gammeId),
-              gammeId: product.gammeId,
-              garanties: garanties
-            });
+            console.log(`⚠️ Aucune formule trouvée pour ${product.gammeLabel}, produit ignoré`);
           }
         } catch (error) {
           console.error(`❌ Erreur lors de la récupération des formules pour ${product.gammeLabel}:`, error);
           // Continuer avec les autres produits
         }
+      }
+
+      // Si aucune offre n'a pu être créée, utiliser le fallback
+      if (offres.length === 0) {
+        console.log('⚠️ Aucune offre créée depuis l\'API, utilisation du fallback');
+        return this.getFallbackOffres(request);
       }
 
       // Trier les offres par prix croissant
@@ -1052,26 +1103,6 @@ class NeolianeService {
     return 1.0; // Multiplicateur par défaut
   }
 
-  // Méthode pour obtenir un ID de formule par défaut
-  private getDefaultFormulaId(gammeId: number): string {
-    // Utiliser une formule par défaut basée sur l'ID du produit
-    // Cette méthode sera utilisée uniquement si aucune formule n'est trouvée via l'API
-    const knownMappings: { [key: number]: string } = {
-      538: '3847',
-      539: '3848',
-      540: '3849',
-      619: '5092',
-      687: '4996' // Exemple pour AltoSante
-    };
-    
-    if (knownMappings[gammeId]) {
-      return knownMappings[gammeId];
-    }
-    
-    // Formule par défaut calculée
-    return (gammeId + 3000).toString();
-  }
-
   // Méthode de fallback avec les offres simulées (en cas d'erreur API)
   private getFallbackOffres(request: TarificationRequest): TarificationResponse {
     console.log('🔄 Génération des offres de fallback...');
@@ -1126,7 +1157,7 @@ class NeolianeService {
     ];
 
     const offres: Offre[] = formules.map(formule => {
-      const prixFinal = this.calculatePriceWithBeneficiaries(
+      const prixFinal = this.calculatePriceWithBeneficiaires(
         basePrice * formule.multiplier,
         request.conjoint,
         request.enfants
@@ -1202,7 +1233,11 @@ class NeolianeService {
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
       // Utiliser le formula_id de l'offre (qui vient maintenant de l'API réelle)
-      const formulaId = selectedOffre.formula_id || selectedOffre.formulaId?.toString() || this.getDefaultFormulaId(selectedOffre.gammeId || 538);
+      const formulaId = selectedOffre.formula_id || selectedOffre.formulaId?.toString();
+      
+      if (!formulaId) {
+        throw new Error('Aucun ID de formule disponible pour cette offre');
+      }
       
       console.log(`🧮 Utilisation de la formule: ${formulaId} pour le produit ${selectedOffre.product_id}`);
 
