@@ -253,11 +253,34 @@ class NeolianeService {
         }
       });
 
-      if (response.status && response.value) {
-        const products = Array.isArray(response.value) ? response.value : [];
-        console.log(`✅ ${products.length} produits récupérés depuis l'API Neoliane`);
-        return products;
+      // Vérifier si la réponse contient des produits
+      if (response && response.status && response.value) {
+        // Vérifier si response.value est un objet ou un tableau
+        if (Array.isArray(response.value)) {
+          // C'est déjà un tableau, on peut le retourner directement
+          console.log(`✅ ${response.value.length} produits récupérés depuis l'API Neoliane`);
+          return response.value;
+        } else if (typeof response.value === 'object' && response.value !== null) {
+          // C'est un objet, on doit extraire les produits
+          // Essayons de trouver un tableau dans les propriétés de l'objet
+          for (const key in response.value) {
+            if (Array.isArray(response.value[key])) {
+              console.log(`✅ ${response.value[key].length} produits trouvés dans la propriété ${key}`);
+              return response.value[key];
+            }
+          }
+          
+          // Si on n'a pas trouvé de tableau, essayons de convertir l'objet en tableau
+          const products = Object.values(response.value);
+          if (products.length > 0 && typeof products[0] === 'object') {
+            console.log(`✅ ${products.length} produits extraits de l'objet`);
+            return products as Product[];
+          }
+        }
       }
+      
+      // Si on arrive ici, on n'a pas pu extraire de produits
+      console.log('⚠️ Aucun produit trouvé dans la réponse API');
       return [];
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des produits:', error);
