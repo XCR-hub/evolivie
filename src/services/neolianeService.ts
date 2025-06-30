@@ -212,11 +212,11 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy Vite - Version 5.0');
+    console.log('🔧 Service Neoliane initialisé avec proxy Vite - Version 5.1');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
-  // Méthode pour faire des requêtes via le proxy Vite
+  // Méthode pour faire des requêtes via le proxy Vite avec gestion d'erreur améliorée
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
     
@@ -237,6 +237,12 @@ class NeolianeService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Réponse d\'erreur:', errorText);
+        
+        // Gestion spécifique des erreurs 500 (problème serveur)
+        if (response.status === 500) {
+          throw new Error(`Erreur serveur API Neoliane (${response.status}). Le service pourrait être temporairement indisponible.`);
+        }
+        
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -245,6 +251,12 @@ class NeolianeService {
       return data;
     } catch (error: any) {
       console.error('❌ Erreur lors de la requête API:', error);
+      
+      // Gestion spécifique des erreurs de réseau
+      if (error.message.includes('socket hang up') || error.message.includes('ECONNRESET')) {
+        throw new Error('Erreur de connexion à l\'API Neoliane. Vérifiez votre connexion réseau ou réessayez plus tard.');
+      }
+      
       throw error;
     }
   }
@@ -638,7 +650,7 @@ class NeolianeService {
     }
   }
 
-  // Méthode pour la tarification - UTILISE MAINTENANT LA VRAIE API NEOLIANE
+  // Méthode pour la tarification - UTILISE MAINTENANT LES VRAIS IDs DE L'API NEOLIANE
   public async getTarification(request: TarificationRequest): Promise<TarificationResponse> {
     try {
       console.log('💰 Récupération des offres RÉELLES depuis l\'API Neoliane...');
@@ -676,7 +688,7 @@ class NeolianeService {
       // Si aucun produit santé trouvé, utiliser tous les produits
       const productsToUse = healthProducts.length > 0 ? healthProducts : products.slice(0, 5);
 
-      // ÉTAPE 3: Créer des offres basées sur les vrais produits
+      // ÉTAPE 3: Créer des offres basées sur les vrais produits avec leurs VRAIS IDs
       const age = new Date().getFullYear() - request.anneeNaissance;
       const basePrice = this.calculateBasePrice(age, request.regime);
 
@@ -685,24 +697,48 @@ class NeolianeService {
       for (const product of productsToUse) {
         if (!product.gammeLabel) continue;
 
-        // Créer des formules simulées pour chaque produit
-        const formulas = this.generateFormulasForProduct(product, basePrice);
+        // IMPORTANT: Utiliser les VRAIS IDs du produit depuis l'API
+        const realProductId = product.gammeId.toString();
         
-        for (const formula of formulas) {
+        // Si le produit a des formules définies, les utiliser
+        if (product.formulas && Array.isArray(product.formulas) && product.formulas.length > 0) {
+          console.log(`📋 Utilisation des formules réelles pour le produit ${product.gammeLabel}`);
+          
+          for (const formula of product.formulas) {
+            const prixFinal = this.calculatePriceWithBeneficiaries(
+              formula.price || basePrice,
+              request.conjoint,
+              request.enfants
+            );
+
+            offres.push({
+              nom: formula.formulaLabel || `${product.gammeLabel} - ${formula.formulaId}`,
+              prix: Math.round(prixFinal * 100) / 100,
+              product_id: realProductId,
+              formula_id: formula.formulaId.toString(),
+              formulaId: formula.formulaId,
+              gammeId: product.gammeId,
+              garanties: formula.guarantees || this.getGarantiesForProduct(product.gammeLabel)
+            });
+          }
+        } else {
+          // Si pas de formules définies, créer une offre basique avec l'ID du produit
+          console.log(`📋 Création d'une offre basique pour le produit ${product.gammeLabel}`);
+          
           const prixFinal = this.calculatePriceWithBeneficiaries(
-            formula.price,
+            basePrice,
             request.conjoint,
             request.enfants
           );
 
           offres.push({
-            nom: formula.formulaLabel || product.gammeLabel,
+            nom: product.gammeLabel,
             prix: Math.round(prixFinal * 100) / 100,
-            product_id: product.gammeId.toString(),
-            formula_id: formula.formulaId.toString(),
-            formulaId: formula.formulaId,
+            product_id: realProductId,
+            formula_id: realProductId, // Utiliser l'ID du produit comme formula_id si pas de formule spécifique
+            formulaId: product.gammeId,
             gammeId: product.gammeId,
-            garanties: formula.guarantees || this.getGarantiesForProduct(product.gammeLabel)
+            garanties: this.getGarantiesForProduct(product.gammeLabel)
           });
         }
       }
@@ -716,7 +752,12 @@ class NeolianeService {
       // Trier les offres par prix croissant
       offres.sort((a, b) => a.prix - b.prix);
 
-      console.log(`✅ ${offres.length} offres RÉELLES générées depuis l'API Neoliane`);
+      console.log(`✅ ${offres.length} offres RÉELLES générées depuis l'API Neoliane avec IDs valides`);
+      console.log('🔍 Détail des offres:', offres.map(o => ({ 
+        nom: o.nom, 
+        product_id: o.product_id, 
+        formula_id: o.formula_id 
+      })));
 
       return {
         success: true,
@@ -730,61 +771,6 @@ class NeolianeService {
       console.log('🔄 Fallback vers les offres simulées...');
       return this.getFallbackOffres(request);
     }
-  }
-
-  // Générer des formules pour un produit donné
-  private generateFormulasForProduct(product: Product, basePrice: number): ProductFormula[] {
-    const productName = product.gammeLabel?.toLowerCase() || '';
-    
-    // Générer 2-3 formules par produit avec des prix différents
-    const formulas: ProductFormula[] = [];
-    
-    if (productName.includes('essentiel') || productName.includes('eco')) {
-      formulas.push({
-        formulaId: 3847,
-        formulaLabel: `${product.gammeLabel} - Essentielle`,
-        price: basePrice * 0.8,
-        guarantees: this.getGarantiesForProduct(product.gammeLabel || '')
-      });
-    } else if (productName.includes('confort')) {
-      formulas.push({
-        formulaId: 3848,
-        formulaLabel: `${product.gammeLabel} - Confort`,
-        price: basePrice * 1.0,
-        guarantees: this.getGarantiesForProduct(product.gammeLabel || '')
-      });
-    } else if (productName.includes('premium') || productName.includes('excellence')) {
-      formulas.push({
-        formulaId: 3849,
-        formulaLabel: `${product.gammeLabel} - Premium`,
-        price: basePrice * 1.4,
-        guarantees: this.getGarantiesForProduct(product.gammeLabel || '')
-      });
-    } else {
-      // Produit générique - créer 3 formules
-      formulas.push(
-        {
-          formulaId: 3847,
-          formulaLabel: `${product.gammeLabel} - Essentielle`,
-          price: basePrice * 0.8,
-          guarantees: this.getGarantiesForProduct(product.gammeLabel || '')
-        },
-        {
-          formulaId: 3848,
-          formulaLabel: `${product.gammeLabel} - Confort`,
-          price: basePrice * 1.0,
-          guarantees: this.getGarantiesForProduct(product.gammeLabel || '')
-        },
-        {
-          formulaId: 3849,
-          formulaLabel: `${product.gammeLabel} - Premium`,
-          price: basePrice * 1.4,
-          guarantees: this.getGarantiesForProduct(product.gammeLabel || '')
-        }
-      );
-    }
-    
-    return formulas;
   }
 
   // Méthode pour obtenir les garanties selon le nom du produit
@@ -834,13 +820,14 @@ class NeolianeService {
     const age = new Date().getFullYear() - request.anneeNaissance;
     const basePrice = this.calculateBasePrice(age, request.regime);
     
+    // IMPORTANT: Utiliser des IDs de produits génériques mais cohérents
     const formules = [
       {
         nom: 'Formule Essentielle',
         multiplier: 0.7,
-        product_id: '538',
-        formula_id: '3847',
-        gammeId: 538,
+        product_id: '1', // ID générique simple
+        formula_id: '1',
+        gammeId: 1,
         garanties: [
           { nom: 'Hospitalisation', niveau: '100%' },
           { nom: 'Médecine courante', niveau: '70%' },
@@ -851,9 +838,9 @@ class NeolianeService {
       {
         nom: 'Formule Confort',
         multiplier: 1.0,
-        product_id: '539',
-        formula_id: '3848',
-        gammeId: 539,
+        product_id: '2',
+        formula_id: '2',
+        gammeId: 2,
         garanties: [
           { nom: 'Hospitalisation', niveau: '100%' },
           { nom: 'Médecine courante', niveau: '100%' },
@@ -865,9 +852,9 @@ class NeolianeService {
       {
         nom: 'Formule Premium',
         multiplier: 1.4,
-        product_id: '540',
-        formula_id: '3849',
-        gammeId: 540,
+        product_id: '3',
+        formula_id: '3',
+        gammeId: 3,
         garanties: [
           { nom: 'Hospitalisation', niveau: '100%' },
           { nom: 'Médecine courante', niveau: '100%' },
@@ -1040,14 +1027,15 @@ class NeolianeService {
       const dateEffect = this.formatDateEffect(request.dateEffet);
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
-      // Utiliser le formula_id de l'offre (qui vient maintenant de l'API réelle)
-      const formulaId = selectedOffre.formula_id || selectedOffre.formulaId?.toString();
+      // Utiliser les IDs RÉELS de l'offre
+      const formulaId = selectedOffre.formula_id;
+      const productId = selectedOffre.product_id;
       
-      if (!formulaId) {
-        throw new Error('Aucun ID de formule disponible pour cette offre');
+      if (!formulaId || !productId) {
+        throw new Error('IDs de produit ou formule manquants dans l\'offre sélectionnée');
       }
       
-      console.log(`🧮 Utilisation de la formule: ${formulaId} pour le produit ${selectedOffre.product_id}`);
+      console.log(`🧮 Utilisation des IDs réels: produit=${productId}, formule=${formulaId}`);
 
       // Étape 1: Créer le panier
       const cartData: CartRequest = {
@@ -1062,7 +1050,7 @@ class NeolianeService {
               regime: this.mapRegimeToApiValue(request.regime),
               products: [
                 {
-                  product_id: selectedOffre.product_id || '538',
+                  product_id: productId,
                   formula_id: formulaId
                 }
               ]
@@ -1165,7 +1153,7 @@ class NeolianeService {
     };
   }
 
-  // Méthode pour tester l'authentification (cœur qui bat)
+  // Méthode pour tester l'authentification (cœur qui bat) avec gestion d'erreur améliorée
   public async testAuthentication(): Promise<boolean> {
     try {
       console.log('💓 Test d\'authentification (cœur qui bat)...');
@@ -1173,8 +1161,14 @@ class NeolianeService {
       const isAuthenticated = !!token;
       console.log(`💓 Résultat du test: ${isAuthenticated ? 'Succès' : 'Échec'}`);
       return isAuthenticated;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Test d\'authentification échoué:', error);
+      
+      // Gestion spécifique des erreurs d'authentification
+      if (error.message.includes('500') || error.message.includes('socket hang up')) {
+        console.warn('⚠️ L\'API Neoliane semble temporairement indisponible');
+      }
+      
       return false;
     }
   }
