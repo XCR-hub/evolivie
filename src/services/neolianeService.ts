@@ -535,13 +535,15 @@ class NeolianeService {
           const member = response.value.profile.members[0];
           if (member && member.products && member.products.length > 0) {
             const product = member.products[0];
-            if (product.formula_id && product.formula_id !== "0") {
+            if (product.formula_id && product.formula_id !== "0" && product.formula_id !== "1") {
               console.log(`✅ Formule trouvée via tarification: ${product.formula_id}`);
               return [{
                 formulaId: parseInt(product.formula_id),
                 formulaLabel: `Formule ${product.formula_id}`,
                 price: parseFloat(product.price || "0")
               }];
+            } else {
+              console.log(`⚠️ Formula ID générique détecté (${product.formula_id}), utilisation des formules connues`);
             }
           }
         }
@@ -549,7 +551,7 @@ class NeolianeService {
         console.log(`⚠️ Impossible de récupérer les formules via tarification pour ${gammeId}:`, error);
       }
 
-      // Si la tarification échoue, utiliser les formules connues
+      // Si la tarification échoue ou retourne des IDs génériques, utiliser les formules connues
       return this.getKnownFormulasForProduct(gammeId);
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des formules via tarification:', error);
