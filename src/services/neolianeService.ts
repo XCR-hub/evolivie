@@ -518,7 +518,6 @@ class NeolianeService {
     for (const formulaId of commonFormulaIds) {
       try {
         const testData = {
-          total_amount: "50",
           profile: {
             date_effect: dateEffect,
             zipcode: request.codePostal,
