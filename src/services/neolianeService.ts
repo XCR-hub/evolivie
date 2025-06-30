@@ -1048,9 +1048,9 @@ class NeolianeService {
         }>;
       }> = [];
 
-      // Membre principal (adhérent)
+      // Membre principal (adhérent) - CORRECTION: utiliser "1" au lieu de "ADHERENT"
       members.push({
-        concern: "ADHERENT", // Utiliser le bon type de concern
+        concern: "1", // 1 = ADHERENT selon l'API Neoliane
         birthyear: request.anneeNaissance.toString(),
         regime: this.mapRegimeToApiValue(request.regime),
         products: [
@@ -1061,24 +1061,24 @@ class NeolianeService {
         ]
       });
 
-      // Ajouter le conjoint s'il existe
+      // Ajouter le conjoint s'il existe - CORRECTION: utiliser "2" au lieu de "CONJOINT"
       if (request.conjoint && request.conjoint.anneeNaissance) {
         console.log('👫 Ajout du conjoint dans les membres');
         members.push({
-          concern: "CONJOINT",
+          concern: "2", // 2 = CONJOINT selon l'API Neoliane
           birthyear: request.conjoint.anneeNaissance.toString(),
           regime: this.mapRegimeToApiValue(request.conjoint.regime),
           products: [] // Les produits ne sont associés qu'au membre principal
         });
       }
 
-      // Ajouter les enfants s'ils existent
+      // Ajouter les enfants s'ils existent - CORRECTION: utiliser "3" au lieu de "ENFANT"
       if (request.enfants && request.enfants.length > 0) {
         console.log(`👶 Ajout de ${request.enfants.length} enfant(s) dans les membres`);
         request.enfants.forEach((enfant, index) => {
           if (enfant.anneeNaissance) {
             members.push({
-              concern: "ENFANT",
+              concern: "3", // 3 = ENFANT selon l'API Neoliane
               birthyear: enfant.anneeNaissance.toString(),
               regime: "6", // Régime étudiant par défaut pour les enfants
               products: [] // Les produits ne sont associés qu'au membre principal
