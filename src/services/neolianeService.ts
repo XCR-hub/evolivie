@@ -160,7 +160,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.9');
+    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 4.0');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
@@ -490,100 +490,89 @@ class NeolianeService {
     }
   }
 
-  // Nouvelle méthode pour récupérer les formules d'un produit via l'API de tarification
-  public async getProductFormulasViaTarification(gammeId: number, request: TarificationRequest): Promise<ProductFormula[]> {
-    try {
-      console.log(`🧮 Récupération des formules via tarification pour le produit ${gammeId}...`);
-      
-      if (!gammeId || gammeId <= 0) {
-        throw new Error(`ID de gamme invalide: ${gammeId}`);
-      }
+  // Nouvelle méthode pour découvrir les formules valides d'un produit
+  public async discoverValidFormulas(gammeId: number, request: TarificationRequest): Promise<ProductFormula[]> {
+    console.log(`🔍 Découverte des formules valides pour le produit ${gammeId}...`);
+    
+    const validFormulas: ProductFormula[] = [];
+    const dateEffect = this.formatDateEffect(request.dateEffet);
+    
+    // Liste des IDs de formules couramment utilisés par Neoliane
+    const commonFormulaIds = [
+      // Formules de base
+      3847, 3848, 3849, 3850, 3851, 3852, 3853, 3854, 3855,
+      // Formules spécifiques AltoSante
+      4990, 4991, 4992, 4993, 4994, 4995, 4996, 4997, 4998, 4999,
+      5000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009,
+      // Formules HospiSante
+      5010, 5011, 5012, 5013, 5014, 5015, 5016, 5017, 5018, 5019,
+      // Formules Innov'Sante
+      5020, 5021, 5022, 5023, 5024, 5025, 5026, 5027, 5028, 5029,
+      // Formules obsèques
+      5092, 5093, 5094, 5095, 5096, 5097, 5098, 5099,
+      // Autres formules courantes
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    ];
 
-      // Formater la date d'effet au format attendu par l'API
-      const dateEffect = this.formatDateEffect(request.dateEffet);
-
-      // Créer une demande de tarification pour ce produit spécifique
-      const tarificationData = {
-        total_amount: "1", // Changé de "0" à "1" pour satisfaire la validation API
-        profile: {
-          date_effect: dateEffect,
-          zipcode: request.codePostal,
-          members: [
-            {
-              concern: "a1",
-              birthyear: request.anneeNaissance.toString(),
-              regime: this.mapRegimeToApiValue(request.regime),
-              products: [
-                {
-                  product_id: gammeId.toString(),
-                  formula_id: "1" // Changé de "0" à "1" pour satisfaire la validation API
-                }
-              ]
-            }
-          ]
-        }
-      };
-
-      console.log('📤 Demande de tarification pour récupérer les formules:', tarificationData);
-
+    // Tester chaque formule pour voir si elle est valide pour ce produit
+    for (const formulaId of commonFormulaIds) {
       try {
-        // Essayer d'appeler l'API de tarification pour ce produit
-        const response = await this.makeProxyRequest('/nws/public/v1/api/cart', 'POST', tarificationData);
+        const testData = {
+          total_amount: "50",
+          profile: {
+            date_effect: dateEffect,
+            zipcode: request.codePostal,
+            members: [
+              {
+                concern: "a1",
+                birthyear: request.anneeNaissance.toString(),
+                regime: this.mapRegimeToApiValue(request.regime),
+                products: [
+                  {
+                    product_id: gammeId.toString(),
+                    formula_id: formulaId.toString()
+                  }
+                ]
+              }
+            ]
+          }
+        };
+
+        const response = await this.makeProxyRequest('/nws/public/v1/api/cart', 'POST', testData);
         
-        // Analyser la réponse pour extraire les formules disponibles
-        if (response && response.status && response.value && response.value.profile && response.value.profile.members) {
-          const member = response.value.profile.members[0];
-          if (member && member.products && member.products.length > 0) {
-            const product = member.products[0];
-            if (product.formula_id && product.formula_id !== "0" && product.formula_id !== "1") {
-              console.log(`✅ Formule trouvée via tarification: ${product.formula_id}`);
-              return [{
-                formulaId: parseInt(product.formula_id),
-                formulaLabel: `Formule ${product.formula_id}`,
-                price: parseFloat(product.price || "0")
-              }];
-            } else {
-              console.log(`⚠️ Formula ID générique détecté (${product.formula_id}), utilisation des formules connues`);
-            }
+        // Si l'appel réussit, cette formule est valide
+        if (response && response.status && response.value) {
+          const member = response.value.profile?.members?.[0];
+          const product = member?.products?.[0];
+          
+          if (product && product.price) {
+            validFormulas.push({
+              formulaId: formulaId,
+              formulaLabel: `Formule ${formulaId}`,
+              price: parseFloat(product.price)
+            });
+            
+            console.log(`✅ Formule valide trouvée: ${formulaId} (prix: ${product.price}€)`);
           }
         }
-      } catch (error) {
-        console.log(`⚠️ Impossible de récupérer les formules via tarification pour ${gammeId}:`, error);
+      } catch (error: any) {
+        // Si l'erreur contient "n'est pas disponible", cette formule n'est pas valide
+        if (error.message && error.message.includes('n\'est pas disponible')) {
+          console.log(`❌ Formule ${formulaId} non valide pour le produit ${gammeId}`);
+        } else {
+          console.log(`⚠️ Erreur lors du test de la formule ${formulaId}:`, error.message);
+        }
+        // Continuer avec la formule suivante
       }
-
-      // Si la tarification échoue ou retourne des IDs génériques, utiliser les formules connues
-      return this.getKnownFormulasForProduct(gammeId);
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération des formules via tarification:', error);
-      return this.getKnownFormulasForProduct(gammeId);
-    }
-  }
-
-  // Méthode pour obtenir les formules connues pour un produit
-  private getKnownFormulasForProduct(gammeId: number): ProductFormula[] {
-    const knownFormulas: { [key: number]: ProductFormula[] } = {
-      538: [{ formulaId: 3847, formulaLabel: 'Formule Essentielle' }],
-      539: [{ formulaId: 3848, formulaLabel: 'Formule Confort' }], // Restauré à 3848
-      540: [{ formulaId: 3849, formulaLabel: 'Formule Premium' }],
-      619: [{ formulaId: 5092, formulaLabel: 'Formule Obsèques' }],
-      687: [
-        { formulaId: 3847, formulaLabel: 'AltoSante Niveau 1' },
-        { formulaId: 3848, formulaLabel: 'AltoSante Niveau 2' }, // Restauré à 3848
-        { formulaId: 3849, formulaLabel: 'AltoSante Niveau 3' }
-      ]
-    };
-
-    if (knownFormulas[gammeId]) {
-      console.log(`✅ Formules connues trouvées pour le produit ${gammeId}`);
-      return knownFormulas[gammeId];
+      
+      // Limiter le nombre de formules trouvées pour éviter trop d'appels API
+      if (validFormulas.length >= 5) {
+        break;
+      }
     }
 
-    // Formule par défaut - utiliser des IDs de formules qui fonctionnent
-    console.log(`⚠️ Aucune formule connue pour ${gammeId}, utilisation d'une formule par défaut`);
-    return [{
-      formulaId: 3847, // Utiliser un ID de formule qui fonctionne au lieu de gammeId + 3000
-      formulaLabel: `Formule ${gammeId}`
-    }];
+    console.log(`🎯 ${validFormulas.length} formules valides trouvées pour le produit ${gammeId}`);
+    return validFormulas;
   }
 
   // Récupération des documents d'un produit
@@ -967,7 +956,7 @@ class NeolianeService {
       // Si aucun produit santé trouvé, utiliser tous les produits
       const productsToUse = healthProducts.length > 0 ? healthProducts : products;
 
-      // ÉTAPE 3: Pour chaque produit, récupérer ses formules RÉELLES via tarification
+      // ÉTAPE 3: Pour chaque produit, découvrir ses formules RÉELLES
       const age = new Date().getFullYear() - request.anneeNaissance;
       const basePrice = this.calculateBasePrice(age, request.regime);
 
@@ -977,18 +966,21 @@ class NeolianeService {
         if (!product.gammeLabel) continue;
 
         try {
-          // Récupérer les formules réelles pour ce produit via tarification
-          console.log(`🧮 Récupération des formules pour ${product.gammeLabel} (ID: ${product.gammeId})`);
-          const formulas = await this.getProductFormulasViaTarification(product.gammeId, request);
+          // Découvrir les formules valides pour ce produit
+          console.log(`🔍 Découverte des formules pour ${product.gammeLabel} (ID: ${product.gammeId})`);
+          const formulas = await this.discoverValidFormulas(product.gammeId, request);
           
           if (formulas && formulas.length > 0) {
-            // Utiliser les vraies formules de l'API
+            // Utiliser les vraies formules découvertes
             for (const formula of formulas) {
               const garanties = this.getGarantiesForProduct(product.gammeLabel);
               const priceMultiplier = this.getPriceMultiplierForProduct(product.gammeLabel);
               
+              // Utiliser le prix de la formule si disponible, sinon calculer
+              const finalPrice = formula.price || (basePrice * priceMultiplier);
+              
               const prixFinal = this.calculatePriceWithBeneficiaries(
-                basePrice * priceMultiplier,
+                finalPrice,
                 request.conjoint,
                 request.enfants
               );
@@ -1004,10 +996,10 @@ class NeolianeService {
               });
             }
           } else {
-            console.log(`⚠️ Aucune formule trouvée pour ${product.gammeLabel}, produit ignoré`);
+            console.log(`⚠️ Aucune formule valide trouvée pour ${product.gammeLabel}, produit ignoré`);
           }
         } catch (error) {
-          console.error(`❌ Erreur lors de la récupération des formules pour ${product.gammeLabel}:`, error);
+          console.error(`❌ Erreur lors de la découverte des formules pour ${product.gammeLabel}:`, error);
           // Continuer avec les autres produits
         }
       }
@@ -1130,7 +1122,7 @@ class NeolianeService {
         nom: 'Formule Confort',
         multiplier: 1.0,
         product_id: '539',
-        formula_id: '3848', // Restauré à 3848
+        formula_id: '3848',
         gammeId: 539,
         garanties: [
           { nom: 'Hospitalisation', niveau: '100%' },
