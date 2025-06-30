@@ -964,7 +964,7 @@ class NeolianeService {
           zipcode: request.codePostal,
           members: [
             {
-              concern: 'a1',
+              concern: '1', // Changed from 'a1' to '1' to fix API validation error
               birthyear: request.anneeNaissance.toString(),
               regime: this.mapRegimeToApiValue(request.regime),
               products: [
