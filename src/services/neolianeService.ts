@@ -561,13 +561,13 @@ class NeolianeService {
   private getKnownFormulasForProduct(gammeId: number): ProductFormula[] {
     const knownFormulas: { [key: number]: ProductFormula[] } = {
       538: [{ formulaId: 3847, formulaLabel: 'Formule Essentielle' }],
-      539: [{ formulaId: 3848, formulaLabel: 'Formule Confort' }],
+      539: [{ formulaId: 3847, formulaLabel: 'Formule Confort' }], // Changé de 3848 à 3847
       540: [{ formulaId: 3849, formulaLabel: 'Formule Premium' }],
       619: [{ formulaId: 5092, formulaLabel: 'Formule Obsèques' }],
       687: [
-        { formulaId: 3847, formulaLabel: 'AltoSante Niveau 1' }, // Changé de 4996 à 3847
-        { formulaId: 3848, formulaLabel: 'AltoSante Niveau 2' }, // Changé de 4997 à 3848
-        { formulaId: 3849, formulaLabel: 'AltoSante Niveau 3' }  // Changé de 4998 à 3849
+        { formulaId: 3847, formulaLabel: 'AltoSante Niveau 1' },
+        { formulaId: 3847, formulaLabel: 'AltoSante Niveau 2' }, // Changé de 3848 à 3847
+        { formulaId: 3849, formulaLabel: 'AltoSante Niveau 3' }
       ]
     };
 
@@ -1128,7 +1128,7 @@ class NeolianeService {
         nom: 'Formule Confort',
         multiplier: 1.0,
         product_id: '539',
-        formula_id: '3848',
+        formula_id: '3847', // Changé de 3848 à 3847
         gammeId: 539,
         garanties: [
           { nom: 'Hospitalisation', niveau: '100%' },
