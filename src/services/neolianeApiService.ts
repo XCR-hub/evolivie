@@ -140,7 +140,7 @@ class NeolianeApiService {
   private clientId = 'e543ff562ad33f763ad9220fe9110bf59c7ebd3736d618f1dc699632a86165eb';
   private clientSecret = '4db90db4a8c18212469a925612ba497e033d83497620133c606e9fe777302f6b';
   private userKey = '9162f8b63e4fc4778d0d5c66a6fd563bb87185ed2a02abd172fa586c8668f4b2';
-  private baseUrl = 'https://api.neoliane.fr';
+  private baseUrl = '/api'; // Use Vite proxy instead of direct API URL
   private accessToken: string | null = null;
   private tokenExpiry: number = 0;
 
@@ -148,7 +148,7 @@ class NeolianeApiService {
     console.log('🔧 Service Neoliane API initialisé');
   }
 
-  // Méthode pour créer un proxy CORS simple
+  // Méthode pour faire des requêtes via le proxy Vite
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
     
@@ -168,31 +168,9 @@ class NeolianeApiService {
 
       return await response.json();
     } catch (error: any) {
-      // En cas d'erreur CORS, utiliser un proxy
-      console.warn('Erreur CORS détectée, utilisation du proxy:', error.message);
-      return this.makeProxyRequest(endpoint, options);
+      console.error('❌ Erreur lors de la requête API:', error);
+      throw error;
     }
-  }
-
-  // Proxy CORS de secours
-  private async makeProxyRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    const proxyUrl = `https://cors-anywhere.herokuapp.com/${this.baseUrl}${endpoint}`;
-    
-    const response = await fetch(proxyUrl, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Proxy Error ${response.status}: ${response.statusText}`);
-    }
-
-    return await response.json();
   }
 
   // Authentification

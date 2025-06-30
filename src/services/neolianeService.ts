@@ -141,7 +141,7 @@ class NeolianeService {
   private clientId = 'e543ff562ad33f763ad9220fe9110bf59c7ebd3736d618f1dc699632a86165eb';
   private clientSecret = '4db90db4a8c18212469a925612ba497e033d83497620133c606e9fe777302f6b';
   private userKey = '9162f8b63e4fc4778d0d5c66a6fd563bb87185ed2a02abd172fa586c8668f4b2';
-  private baseUrl = 'https://api.neoliane.fr';
+  private baseUrl = '/api'; // Use Vite proxy instead of direct API URL
   private accessToken: string | null = null;
   private tokenExpiry: number = 0;
 
@@ -150,7 +150,7 @@ class NeolianeService {
     console.log('🔑 Clés API pré-configurées et prêtes à l\'emploi');
   }
 
-  // Méthode pour créer un proxy CORS simple
+  // Méthode pour faire des requêtes via le proxy Vite
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
     
@@ -176,34 +176,9 @@ class NeolianeService {
       console.log('✅ Données reçues:', data);
       return data;
     } catch (error: any) {
-      // En cas d'erreur CORS, utiliser un proxy
-      console.warn('⚠️ Erreur CORS détectée, utilisation du proxy:', error.message);
-      return this.makeProxyRequest(endpoint, options);
+      console.error('❌ Erreur lors de la requête API:', error);
+      throw error;
     }
-  }
-
-  // Proxy CORS de secours utilisant un service public
-  private async makeProxyRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    // Utiliser allorigins.win comme proxy CORS gratuit
-    const targetUrl = `${this.baseUrl}${endpoint}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    
-    console.log(`🔄 Utilisation du proxy pour: ${endpoint}`);
-    
-    const response = await fetch(proxyUrl, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Proxy Error ${response.status}: ${response.statusText}`);
-    }
-
-    return await response.json();
   }
 
   // Authentification avec gestion automatique du token
@@ -779,8 +754,8 @@ class NeolianeService {
     };
   }
 
-  // Méthode pour calculer le prix en fonction des bénéficiaires
-  private calculatePriceWithBeneficiaries(basePrice: number, conjoint?: any, enfants?: any[]): number {
+  // Méthode pour calculer le prix en fonction des bénéficiaires - CONVERTED TO ARROW FUNCTION
+  private calculatePriceWithBeneficiaries = (basePrice: number, conjoint?: any, enfants?: any[]): number => {
     let totalPrice = basePrice;
 
     // Ajouter le prix pour le conjoint (généralement 80% du prix principal)
@@ -818,7 +793,8 @@ class NeolianeService {
     return totalPrice;
   }
 
-  private calculateBasePrice(age: number, regime: string): number {
+  // CONVERTED TO ARROW FUNCTION
+  private calculateBasePrice = (age: number, regime: string): number => {
     let basePrice = 45; // Prix de base
 
     // Ajustement selon l'âge
@@ -855,6 +831,9 @@ class NeolianeService {
 
     return basePrice;
   }
+
+  // Méthode pour calculer le prix en fonction des bénéficiaires - ALIAS FOR COMPATIBILITY
+  private calculatePriceWithBeneficiaires = this.calculatePriceWithBeneficiaries;
 
   // Méthode pour démarrer le processus de souscription complet
   public async startSubscriptionFlow(
