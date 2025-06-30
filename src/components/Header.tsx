@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Menu, X, Heart, Phone, Activity } from 'lucide-react';
-import { neolianeService } from '../services/neolianeService';
-import AuthConfig from './AuthConfig';
+import { Menu, X, Heart, Phone, User, LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import ApiStatusIndicator from './ApiStatusIndicator';
 
 const Header: React.FC = () => {
-  const [showAuthConfig, setShowAuthConfig] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [apiHealthy, setApiHealthy] = useState(true);
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const location = useLocation();
 
   const navItems = [
@@ -19,31 +17,25 @@ const Header: React.FC = () => {
     { path: '/contact', label: 'Contact' }
   ];
 
-  // Vérifier la santé de l'API au chargement et périodiquement
   useEffect(() => {
-    const checkApiHealth = async () => {
-      setIsCheckingHealth(true);
-      try {
-        const isHealthy = await neolianeService.testAuthentication();
-        setApiHealthy(isHealthy);
-      } catch (error) {
-        setApiHealthy(false);
-      } finally {
-        setIsCheckingHealth(false);
-      }
+    // Récupérer l'utilisateur connecté
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
     };
 
-    // Vérification initiale
-    checkApiHealth();
+    getUser();
 
-    // Vérification périodique toutes les 5 minutes
-    const interval = setInterval(checkApiHealth, 5 * 60 * 1000);
+    // Écouter les changements d'authentification
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+    });
 
-    return () => clearInterval(interval);
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleHealthIndicatorClick = () => {
-    setShowAuthConfig(true);
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
@@ -100,53 +92,43 @@ const Header: React.FC = () => {
 
             {/* Actions */}
             <div className="flex items-center space-x-4">
+              {/* Indicateur API */}
+              <ApiStatusIndicator />
+
+              {/* Utilisateur connecté ou bouton de connexion */}
+              {user ? (
+                <div className="flex items-center space-x-4">
+                  <Link
+                    to="/dashboard"
+                    className="flex items-center space-x-2 text-gray-700 hover:text-evolivie-mint transition-colors"
+                  >
+                    <User size={20} />
+                    <span className="hidden sm:inline">Mon espace</span>
+                  </Link>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center space-x-2 text-gray-700 hover:text-red-600 transition-colors"
+                  >
+                    <LogOut size={20} />
+                    <span className="hidden sm:inline">Déconnexion</span>
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="flex items-center space-x-2 text-gray-700 hover:text-evolivie-mint transition-colors"
+                >
+                  <User size={20} />
+                  <span className="hidden sm:inline">Connexion</span>
+                </Link>
+              )}
+
               <Link
                 to="/simulation"
                 className="hidden sm:inline-flex btn-evolivie-primary text-sm"
               >
                 Devis gratuit
               </Link>
-
-              {/* Indicateur de santé API */}
-              <motion.button
-                onClick={handleHealthIndicatorClick}
-                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-                title={apiHealthy ? "API Neoliane opérationnelle" : "Problème avec l'API Neoliane"}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {isCheckingHealth ? (
-                  <Activity className="text-blue-500 animate-pulse" size={20} />
-                ) : apiHealthy ? (
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.2, 1],
-                      opacity: [0.8, 1, 0.8]
-                    }}
-                    transition={{ 
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  >
-                    <Heart className="text-green-500" size={20} fill="currentColor" />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.1, 1],
-                      opacity: [0.7, 1, 0.7]
-                    }}
-                    transition={{ 
-                      duration: 1.5,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  >
-                    <Heart className="text-red-500" size={20} fill="currentColor" />
-                  </motion.div>
-                )}
-              </motion.button>
 
               {/* Mobile menu button */}
               <button
@@ -193,11 +175,6 @@ const Header: React.FC = () => {
           )}
         </div>
       </motion.header>
-
-      {/* Modal de configuration API */}
-      {showAuthConfig && (
-        <AuthConfig onClose={() => setShowAuthConfig(false)} />
-      )}
     </>
   );
 };

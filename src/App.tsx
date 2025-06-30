@@ -13,6 +13,8 @@ import ArticlePage from './pages/ArticlePage';
 import ContactPage from './pages/ContactPage';
 import LegalPage from './pages/LegalPage';
 import TermsPage from './pages/TermsPage';
+import AuthPage from './pages/AuthPage';
+import DashboardPage from './pages/DashboardPage';
 
 // Components
 import Header from './components/Header';
@@ -41,6 +43,8 @@ function App() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/mentions-legales" element={<LegalPage />} />
             <Route path="/conditions-generales" element={<TermsPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
           </Routes>
         </motion.main>
 
