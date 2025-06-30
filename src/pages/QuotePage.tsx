@@ -53,6 +53,17 @@ const QuotePage: React.FC = () => {
     'Expatrié'
   ];
 
+  // Helper function to calculate age from birth year
+  const calculateAge = (birthYear: number): number => {
+    const currentYear = new Date().getFullYear();
+    return currentYear - birthYear;
+  };
+
+  // Helper function to validate age range
+  const isValidAge = (age: number): boolean => {
+    return age >= 18 && age <= 99;
+  };
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setError('');
@@ -96,11 +107,49 @@ const QuotePage: React.FC = () => {
       toast.error('Veuillez saisir une année de naissance valide');
       return;
     }
+
+    // Validate age range for main applicant
+    const birthYear = parseInt(formData.anneeNaissance);
+    const age = calculateAge(birthYear);
+    if (!isValidAge(age)) {
+      setError(`L'âge doit être compris entre 18 et 99 ans. Âge calculé: ${age} ans`);
+      toast.error(`Âge invalide: ${age} ans. L'âge doit être compris entre 18 et 99 ans.`);
+      return;
+    }
     
     if (!formData.regime) {
       setError('Veuillez sélectionner un régime');
       toast.error('Veuillez sélectionner un régime');
       return;
+    }
+
+    // Validate conjoint age if present
+    if (conjoint && conjoint.anneeNaissance) {
+      const conjointBirthYear = parseInt(conjoint.anneeNaissance);
+      if (conjointBirthYear > 0) {
+        const conjointAge = calculateAge(conjointBirthYear);
+        if (!isValidAge(conjointAge)) {
+          setError(`L'âge du conjoint doit être compris entre 18 et 99 ans. Âge calculé: ${conjointAge} ans`);
+          toast.error(`Âge du conjoint invalide: ${conjointAge} ans`);
+          return;
+        }
+      }
+    }
+
+    // Validate enfants ages if present
+    for (let i = 0; i < enfants.length; i++) {
+      const enfant = enfants[i];
+      if (enfant.anneeNaissance) {
+        const enfantBirthYear = parseInt(enfant.anneeNaissance);
+        if (enfantBirthYear > 0) {
+          const enfantAge = calculateAge(enfantBirthYear);
+          if (enfantAge < 0 || enfantAge > 25) {
+            setError(`L'âge de l'enfant ${i + 1} doit être compris entre 0 et 25 ans. Âge calculé: ${enfantAge} ans`);
+            toast.error(`Âge de l'enfant ${i + 1} invalide: ${enfantAge} ans`);
+            return;
+          }
+        }
+      }
     }
 
     setLoading(true);
@@ -309,6 +358,14 @@ const QuotePage: React.FC = () => {
                     maxLength={4}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Âge requis: entre 18 et 99 ans
+                    {formData.anneeNaissance && formData.anneeNaissance.length === 4 && (
+                      <span className="ml-2 text-blue-600">
+                        (Âge: {calculateAge(parseInt(formData.anneeNaissance))} ans)
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -376,14 +433,21 @@ const QuotePage: React.FC = () => {
                     placeholder="Prénom"
                     className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <input
-                    type="text"
-                    value={conjoint.anneeNaissance}
-                    onChange={(e) => handleConjointChange('anneeNaissance', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="Année de naissance"
-                    maxLength={4}
-                    className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <div>
+                    <input
+                      type="text"
+                      value={conjoint.anneeNaissance}
+                      onChange={(e) => handleConjointChange('anneeNaissance', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="Année de naissance"
+                      maxLength={4}
+                      className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                    />
+                    {conjoint.anneeNaissance && conjoint.anneeNaissance.length === 4 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Âge: {calculateAge(parseInt(conjoint.anneeNaissance))} ans
+                      </p>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -426,14 +490,21 @@ const QuotePage: React.FC = () => {
                         placeholder="Prénom"
                         className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                      <input
-                        type="text"
-                        value={enfant.anneeNaissance}
-                        onChange={(e) => handleEnfantChange(enfant.id, 'anneeNaissance', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="Année de naissance"
-                        maxLength={4}
-                        className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                      <div>
+                        <input
+                          type="text"
+                          value={enfant.anneeNaissance}
+                          onChange={(e) => handleEnfantChange(enfant.id, 'anneeNaissance', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="Année de naissance"
+                          maxLength={4}
+                          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                        />
+                        {enfant.anneeNaissance && enfant.anneeNaissance.length === 4 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Âge: {calculateAge(parseInt(enfant.anneeNaissance))} ans
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
