@@ -160,7 +160,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.7');
+    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.8');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
