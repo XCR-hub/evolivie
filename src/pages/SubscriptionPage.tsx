@@ -27,31 +27,6 @@ const SubscriptionPage: React.FC = () => {
     const initializeSubscription = async () => {
       try {
         const offre: Offre = JSON.parse(offreData);
-
-// 🔧 Nettoyage strict du formulaId → formulaId
-const rawFormula = (offre as any).formulaId;
-if (typeof rawFormula === 'string') {
-  const match = rawFormula.match(/formula_(\d+)/);
-  if (match) {
-    offre.formulaId = parseInt(match[1], 10);
-  }
-} else if (typeof rawFormula === 'number') {
-  offre.formulaId = rawFormula;
-}
-
-
-// 🛠 CORRECTION CRITIQUE : transformer formulaId string → formulaId number
-if (typeof (offre as any).formulaId === 'string' && (offre as any).formulaId.includes('formula_')) {
-  const extracted = parseInt((offre as any).formulaId.replace('formula_', ''), 10);
-  if (!isNaN(extracted)) {
-    offre.formulaId = extracted;
-  }
-}
-
-if (typeof (offre as any).formulaId === 'string' && !isNaN(parseInt((offre as any).formulaId))) {
-  offre.formulaId = parseInt((offre as any).formulaId, 10);
-}
-
         const request: TarificationRequest = JSON.parse(requestData);
 
         setSelectedOffre(offre);
