@@ -881,7 +881,7 @@ class NeolianeService {
     ];
 
     const offres: Offre[] = formules.map(formule => {
-      const prixFinal = this.calculatePriceWithBeneficiaires(
+      const prixFinal = this.calculatePriceWithBeneficiaries(
         basePrice * formule.multiplier,
         request.conjoint,
         request.enfants
@@ -1057,7 +1057,7 @@ class NeolianeService {
           zipcode: request.codePostal,
           members: [
             {
-              concern: '0', // Changed from 'a1' to '0' to fix API error
+              concern: "a1", // Valeur correcte selon la documentation
               birthyear: request.anneeNaissance.toString(),
               regime: this.mapRegimeToApiValue(request.regime),
               products: [
