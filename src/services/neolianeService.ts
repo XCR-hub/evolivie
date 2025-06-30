@@ -160,7 +160,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.7');
+    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.8');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
@@ -825,251 +825,167 @@ class NeolianeService {
     return result;
   }
 
-  // Méthode pour calculer le prix en fonction des bénéficiaires
-  private calculatePriceWithBeneficiaries(basePrice: number, conjoint?: any, enfants?: any[]): number {
-    let totalPrice = basePrice;
-
-    // Ajouter le prix pour le conjoint (généralement 80% du prix principal)
-    if (conjoint && conjoint.anneeNaissance) {
-      const conjointAge = new Date().getFullYear() - parseInt(conjoint.anneeNaissance);
-      let conjointMultiplier = 0.8;
-      
-      // Ajustement selon l'âge du conjoint
-      if (conjointAge > 50) {
-        conjointMultiplier = 0.9;
-      } else if (conjointAge > 60) {
-        conjointMultiplier = 1.0;
-      }
-      
-      totalPrice += basePrice * conjointMultiplier;
-    }
-
-    // Ajouter le prix pour les enfants (généralement 30% du prix principal par enfant)
-    if (enfants && enfants.length > 0) {
-      enfants.forEach(enfant => {
-        if (enfant.anneeNaissance) {
-          const enfantAge = new Date().getFullYear() - parseInt(enfant.anneeNaissance);
-          let enfantMultiplier = 0.3;
-          
-          // Ajustement selon l'âge de l'enfant
-          if (enfantAge > 18) {
-            enfantMultiplier = 0.5; // Enfant majeur
-          }
-          
-          totalPrice += basePrice * enfantMultiplier;
-        }
-      });
-    }
-
-    return totalPrice;
-  }
-
-  // Méthode pour la tarification - UTILISE MAINTENANT LA VRAIE API NEOLIANE
+  // Méthode pour la tarification - UTILISE MAINTENANT L'ENDPOINT DÉDIÉ DE TARIFICATION
   public async getTarification(request: TarificationRequest): Promise<TarificationResponse> {
     try {
-      console.log('💰 Récupération des offres RÉELLES depuis l\'API Neoliane...');
+      console.log('💰 Récupération des offres via l\'endpoint de tarification Neoliane...');
       console.log('📋 Paramètres:', request);
 
       // Vérifier le format de la date
-      try {
-        this.formatDateEffect(request.dateEffet);
-      } catch (error: any) {
-        throw new Error(`Erreur de date: ${error.message}`);
+      const dateEffect = this.formatDateEffect(request.dateEffet);
+
+      // Construire la requête pour l'endpoint de tarification
+      const tarificationRequest = {
+        profile: {
+          date_effect: dateEffect,
+          zipcode: request.codePostal,
+          members: [
+            {
+              concern: 'a1',
+              birthyear: request.anneeNaissance.toString(),
+              regime: this.mapRegimeToApiValue(request.regime)
+            }
+          ]
+        }
+      };
+
+      // Ajouter le conjoint s'il existe
+      if (request.conjoint && request.conjoint.anneeNaissance) {
+        tarificationRequest.profile.members.push({
+          concern: 'c1',
+          birthyear: request.conjoint.anneeNaissance.toString(),
+          regime: this.mapRegimeToApiValue(request.conjoint.regime || request.regime)
+        });
       }
 
-      // ÉTAPE 1: Récupérer la liste RÉELLE des produits depuis l'API Neoliane
-      console.log('📦 Récupération de la liste des produits depuis l\'API...');
-      const products = await this.getProducts();
-      console.log(`✅ ${products ? products.length : 0} produits récupérés depuis l'API Neoliane`);
+      // Ajouter les enfants s'ils existent
+      if (request.enfants && request.enfants.length > 0) {
+        request.enfants.forEach((enfant, index) => {
+          if (enfant.anneeNaissance) {
+            tarificationRequest.profile.members.push({
+              concern: `e${index + 1}`,
+              birthyear: enfant.anneeNaissance.toString(),
+              regime: this.mapRegimeToApiValue(request.regime) // Les enfants suivent le régime du parent
+            });
+          }
+        });
+      }
 
-      // Vérifier que nous avons des produits
-      if (!products || !Array.isArray(products) || products.length === 0) {
-        console.log('⚠️ Aucun produit récupéré de l\'API, utilisation du fallback');
+      console.log('📤 Requête de tarification:', JSON.stringify(tarificationRequest, null, 2));
+
+      // Appeler l'endpoint de tarification dédié
+      const response = await this.makeProxyRequest('/nws/public/v1/api/tarification', 'POST', tarificationRequest);
+      
+      console.log('📥 Réponse de tarification:', response);
+
+      // Traiter la réponse de l'API de tarification
+      if (response && response.status && response.value) {
+        const tarificationData = response.value;
+        
+        // Convertir les données de tarification en offres
+        const offres: Offre[] = [];
+        
+        if (tarificationData.products && Array.isArray(tarificationData.products)) {
+          for (const product of tarificationData.products) {
+            if (product.formulas && Array.isArray(product.formulas)) {
+              for (const formula of product.formulas) {
+                // Construire les garanties à partir des données de la formule
+                const garanties = this.buildGuaranteesFromFormula(formula);
+                
+                offres.push({
+                  nom: formula.name || product.name || 'Formule santé',
+                  prix: formula.price || 0,
+                  product_id: product.id?.toString() || product.product_id?.toString(),
+                  formula_id: formula.id?.toString() || formula.formula_id?.toString(),
+                  formulaId: formula.id || formula.formula_id,
+                  gammeId: product.id || product.product_id,
+                  garanties: garanties
+                });
+              }
+            }
+          }
+        }
+
+        // Si aucune offre n'est trouvée dans la structure attendue, essayer d'autres formats
+        if (offres.length === 0) {
+          console.log('⚠️ Aucune offre trouvée dans le format attendu, tentative d\'analyse alternative...');
+          
+          // Essayer de traiter directement la réponse comme une liste d'offres
+          if (Array.isArray(tarificationData)) {
+            for (const item of tarificationData) {
+              if (item.price !== undefined && item.product_id && item.formula_id) {
+                offres.push({
+                  nom: item.name || item.label || 'Formule santé',
+                  prix: item.price,
+                  product_id: item.product_id.toString(),
+                  formula_id: item.formula_id.toString(),
+                  formulaId: item.formula_id,
+                  gammeId: item.product_id,
+                  garanties: this.getDefaultGuarantees()
+                });
+              }
+            }
+          }
+        }
+
+        // Trier les offres par prix croissant
+        offres.sort((a, b) => a.prix - b.prix);
+
+        console.log(`✅ ${offres.length} offres récupérées via l'endpoint de tarification`);
+
+        if (offres.length > 0) {
+          return {
+            success: true,
+            offres
+          };
+        } else {
+          console.log('⚠️ Aucune offre éligible trouvée, utilisation du fallback');
+          return this.getFallbackOffres(request);
+        }
+
+      } else {
+        console.log('⚠️ Réponse de tarification invalide, utilisation du fallback');
         return this.getFallbackOffres(request);
       }
 
-      // ÉTAPE 2: Filtrer les produits de type "sante"
-      const healthProducts = products.filter(product => 
-        product.type === 'sante' || 
-        (product.gammeLabel && (
-          product.gammeLabel.toLowerCase().includes('santé') ||
-          product.gammeLabel.toLowerCase().includes('sante')
-        ))
-      );
-
-      console.log(`🏥 ${healthProducts.length} produits santé trouvés:`, healthProducts.map(p => p.gammeLabel));
-
-      // Si aucun produit santé trouvé, utiliser tous les produits
-      const productsToUse = healthProducts.length > 0 ? healthProducts : products;
-
-      // ÉTAPE 3: Pour chaque produit, récupérer ses formules RÉELLES
-      const age = new Date().getFullYear() - request.anneeNaissance;
-      const basePrice = this.calculateBasePrice(age, request.regime);
-
-      const offres: Offre[] = [];
-
-      for (const product of productsToUse) {
-        if (!product.gammeLabel) continue;
-
-        try {
-          // Récupérer les formules réelles pour ce produit
-          console.log(`🧮 Récupération des formules pour ${product.gammeLabel} (ID: ${product.gammeId})`);
-          const formulas = await this.getProductFormulas(product.gammeId);
-          
-          if (formulas && formulas.length > 0) {
-            // Utiliser les vraies formules de l'API
-            for (const formula of formulas) {
-              const garanties = this.getGarantiesForProduct(product.gammeLabel);
-              const priceMultiplier = this.getPriceMultiplierForProduct(product.gammeLabel);
-              
-              const prixFinal = this.calculatePriceWithBeneficiaries(
-                basePrice * priceMultiplier,
-                request.conjoint,
-                request.enfants
-              );
-
-              offres.push({
-                nom: formula.formulaLabel || product.gammeLabel,
-                prix: Math.round(prixFinal * 100) / 100,
-                product_id: product.gammeId.toString(),
-                formula_id: formula.formulaId.toString(),
-                formulaId: formula.formulaId,
-                gammeId: product.gammeId,
-                garanties: garanties
-              });
-            }
-          } else {
-            // Fallback: créer une offre avec une formule par défaut
-            console.log(`⚠️ Aucune formule trouvée pour ${product.gammeLabel}, utilisation d'une formule par défaut`);
-            const garanties = this.getGarantiesForProduct(product.gammeLabel);
-            const priceMultiplier = this.getPriceMultiplierForProduct(product.gammeLabel);
-            
-            const prixFinal = this.calculatePriceWithBeneficiaries(
-              basePrice * priceMultiplier,
-              request.conjoint,
-              request.enfants
-            );
-
-            offres.push({
-              nom: product.gammeLabel,
-              prix: Math.round(prixFinal * 100) / 100,
-              product_id: product.gammeId.toString(),
-              formula_id: this.getDefaultFormulaId(product.gammeId),
-              gammeId: product.gammeId,
-              garanties: garanties
-            });
-          }
-        } catch (error) {
-          console.error(`❌ Erreur lors de la récupération des formules pour ${product.gammeLabel}:`, error);
-          // Continuer avec les autres produits
-        }
-      }
-
-      // Trier les offres par prix croissant
-      offres.sort((a, b) => a.prix - b.prix);
-
-      console.log(`✅ ${offres.length} offres RÉELLES générées depuis l'API Neoliane`);
-
-      return {
-        success: true,
-        offres
-      };
-
     } catch (error: any) {
-      console.error('❌ Erreur lors de la tarification:', error);
+      console.error('❌ Erreur lors de la tarification via l\'endpoint dédié:', error);
       
-      // En cas d'erreur avec l'API, fallback vers les offres simulées
+      // En cas d'erreur avec l'endpoint de tarification, fallback vers les offres simulées
       console.log('🔄 Fallback vers les offres simulées...');
       return this.getFallbackOffres(request);
     }
   }
 
-  // Méthode pour obtenir les garanties selon le nom du produit
-  private getGarantiesForProduct(productName: string): Array<{nom: string, niveau: string}> {
-    const name = productName.toLowerCase();
+  // Méthode pour construire les garanties à partir des données de formule
+  private buildGuaranteesFromFormula(formula: any): Array<{nom: string, niveau: string}> {
+    const garanties: Array<{nom: string, niveau: string}> = [];
     
-    if (name.includes('dynamique')) {
-      return [
-        { nom: 'Hospitalisation', niveau: '100%' },
-        { nom: 'Médecine courante', niveau: '80%' },
-        { nom: 'Pharmacie', niveau: '70%' },
-        { nom: 'Analyses', niveau: '80%' }
-      ];
-    } else if (name.includes('hospisanté') || name.includes('hospisante')) {
-      return [
-        { nom: 'Hospitalisation', niveau: '100%' },
-        { nom: 'Médecine courante', niveau: '85%' },
-        { nom: 'Pharmacie', niveau: '75%' },
-        { nom: 'Analyses', niveau: '85%' }
-      ];
-    } else if (name.includes('innov')) {
-      return [
-        { nom: 'Hospitalisation', niveau: '100%' },
-        { nom: 'Médecine courante', niveau: '100%' },
-        { nom: 'Pharmacie', niveau: '85%' },
-        { nom: 'Optique', niveau: '200€/an' },
-        { nom: 'Analyses', niveau: '100%' }
-      ];
-    } else if (name.includes('altosanté') || name.includes('altosante')) {
-      return [
-        { nom: 'Hospitalisation', niveau: '100%' },
-        { nom: 'Médecine courante', niveau: '100%' },
-        { nom: 'Pharmacie', niveau: '100%' },
-        { nom: 'Optique', niveau: '900€/an' },
-        { nom: 'Dentaire', niveau: '400%' },
-        { nom: 'Analyses', niveau: '100%' },
-        { nom: 'Médecines douces', niveau: '500€/an' },
-        { nom: 'Cure thermale', niveau: '400€/an' },
-        { nom: 'Chambre particulière', niveau: 'Illimitée' },
-        { nom: 'Assistance internationale', niveau: 'Incluse' }
-      ];
-    } else {
-      // Garanties par défaut
-      return [
-        { nom: 'Hospitalisation', niveau: '100%' },
-        { nom: 'Médecine courante', niveau: '100%' },
-        { nom: 'Pharmacie', niveau: '80%' },
-        { nom: 'Analyses', niveau: '100%' }
-      ];
-    }
-  }
-
-  // Méthode pour obtenir le multiplicateur de prix selon le nom du produit
-  private getPriceMultiplierForProduct(productName: string): number {
-    const name = productName.toLowerCase();
-    
-    if (name.includes('dynamique')) return 0.8;
-    if (name.includes('hospisanté') || name.includes('hospisante')) return 0.9;
-    if (name.includes('innov')) return 1.1;
-    if (name.includes('altosanté') || name.includes('altosante')) return 2.3;
-    if (name.includes('performance')) return 1.3;
-    if (name.includes('plénitude')) return 1.5;
-    if (name.includes('quiétude')) return 1.7;
-    if (name.includes('optima')) return 2.0;
-    if (name.includes('pulse')) return 1.2;
-    if (name.includes('énergik') || name.includes('energik')) return 1.4;
-    
-    return 1.0; // Multiplicateur par défaut
-  }
-
-  // Méthode pour obtenir un ID de formule par défaut
-  private getDefaultFormulaId(gammeId: number): string {
-    // Utiliser une formule par défaut basée sur l'ID du produit
-    // Cette méthode sera utilisée uniquement si aucune formule n'est trouvée via l'API
-    const knownMappings: { [key: number]: string } = {
-      538: '3847',
-      539: '3848',
-      540: '3849',
-      619: '5092',
-      687: '4996' // Exemple pour AltoSante
-    };
-    
-    if (knownMappings[gammeId]) {
-      return knownMappings[gammeId];
+    if (formula.guarantees && Array.isArray(formula.guarantees)) {
+      for (const guarantee of formula.guarantees) {
+        garanties.push({
+          nom: guarantee.name || guarantee.label || 'Garantie',
+          niveau: guarantee.level || guarantee.coverage || '100%'
+        });
+      }
     }
     
-    // Formule par défaut calculée
-    return (gammeId + 3000).toString();
+    // Si aucune garantie n'est fournie, utiliser des garanties par défaut
+    if (garanties.length === 0) {
+      return this.getDefaultGuarantees();
+    }
+    
+    return garanties;
+  }
+
+  // Méthode pour obtenir des garanties par défaut
+  private getDefaultGuarantees(): Array<{nom: string, niveau: string}> {
+    return [
+      { nom: 'Hospitalisation', niveau: '100%' },
+      { nom: 'Médecine courante', niveau: '100%' },
+      { nom: 'Pharmacie', niveau: '80%' },
+      { nom: 'Analyses et examens', niveau: '100%' }
+    ];
   }
 
   // Méthode de fallback avec les offres simulées (en cas d'erreur API)
@@ -1145,8 +1061,47 @@ class NeolianeService {
     return {
       success: true,
       offres,
-      message: 'Offres de fallback (API temporairement indisponible)'
+      message: 'Offres de fallback (endpoint de tarification temporairement indisponible)'
     };
+  }
+
+  // Méthode pour calculer le prix en fonction des bénéficiaires
+  private calculatePriceWithBeneficiaries(basePrice: number, conjoint?: any, enfants?: any[]): number {
+    let totalPrice = basePrice;
+
+    // Ajouter le prix pour le conjoint (généralement 80% du prix principal)
+    if (conjoint && conjoint.anneeNaissance) {
+      const conjointAge = new Date().getFullYear() - parseInt(conjoint.anneeNaissance);
+      let conjointMultiplier = 0.8;
+      
+      // Ajustement selon l'âge du conjoint
+      if (conjointAge > 50) {
+        conjointMultiplier = 0.9;
+      } else if (conjointAge > 60) {
+        conjointMultiplier = 1.0;
+      }
+      
+      totalPrice += basePrice * conjointMultiplier;
+    }
+
+    // Ajouter le prix pour les enfants (généralement 30% du prix principal par enfant)
+    if (enfants && enfants.length > 0) {
+      enfants.forEach(enfant => {
+        if (enfant.anneeNaissance) {
+          const enfantAge = new Date().getFullYear() - parseInt(enfant.anneeNaissance);
+          let enfantMultiplier = 0.3;
+          
+          // Ajustement selon l'âge de l'enfant
+          if (enfantAge > 18) {
+            enfantMultiplier = 0.5; // Enfant majeur
+          }
+          
+          totalPrice += basePrice * enfantMultiplier;
+        }
+      });
+    }
+
+    return totalPrice;
   }
 
   private calculateBasePrice(age: number, regime: string): number {
@@ -1201,35 +1156,76 @@ class NeolianeService {
       const dateEffect = this.formatDateEffect(request.dateEffet);
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
-      // Utiliser le formula_id de l'offre (qui vient maintenant de l'API réelle)
-      const formulaId = selectedOffre.formula_id || selectedOffre.formulaId?.toString() || this.getDefaultFormulaId(selectedOffre.gammeId || 538);
+      // Utiliser les IDs de l'offre qui viennent maintenant de l'endpoint de tarification
+      const productId = selectedOffre.product_id;
+      const formulaId = selectedOffre.formula_id;
       
-      console.log(`🧮 Utilisation de la formule: ${formulaId} pour le produit ${selectedOffre.product_id}`);
+      if (!productId || !formulaId) {
+        throw new Error('IDs de produit ou formule manquants dans l\'offre sélectionnée');
+      }
+      
+      console.log(`🧮 Utilisation du produit ${productId} avec la formule ${formulaId}`);
+
+      // Construire les membres pour le panier
+      const members = [
+        {
+          concern: 'a1',
+          birthyear: request.anneeNaissance.toString(),
+          regime: this.mapRegimeToApiValue(request.regime),
+          products: [
+            {
+              product_id: productId,
+              formula_id: formulaId
+            }
+          ]
+        }
+      ];
+
+      // Ajouter le conjoint s'il existe
+      if (request.conjoint && request.conjoint.anneeNaissance) {
+        members.push({
+          concern: 'c1',
+          birthyear: request.conjoint.anneeNaissance.toString(),
+          regime: this.mapRegimeToApiValue(request.conjoint.regime || request.regime),
+          products: [
+            {
+              product_id: productId,
+              formula_id: formulaId
+            }
+          ]
+        });
+      }
+
+      // Ajouter les enfants s'ils existent
+      if (request.enfants && request.enfants.length > 0) {
+        request.enfants.forEach((enfant, index) => {
+          if (enfant.anneeNaissance) {
+            members.push({
+              concern: `e${index + 1}`,
+              birthyear: enfant.anneeNaissance.toString(),
+              regime: this.mapRegimeToApiValue(request.regime),
+              products: [
+                {
+                  product_id: productId,
+                  formula_id: formulaId
+                }
+              ]
+            });
+          }
+        });
+      }
 
       // Étape 1: Créer le panier
       const cartData: CartRequest = {
         total_amount: selectedOffre.prix.toString(),
         profile: {
-          date_effect: dateEffect, // Objet avec year, month, day en NOMBRES
+          date_effect: dateEffect,
           zipcode: request.codePostal,
-          members: [
-            {
-              concern: 'a1',
-              birthyear: request.anneeNaissance.toString(),
-              regime: this.mapRegimeToApiValue(request.regime),
-              products: [
-                {
-                  product_id: selectedOffre.product_id || '538',
-                  formula_id: formulaId
-                }
-              ]
-            }
-          ]
+          members: members
         }
       };
 
       console.log('🛒 Création du panier avec les données:', JSON.stringify(cartData, null, 2));
-      console.log("📅 Date formatée envoyée à l'API:", cartData.profile.date_effect);
       
       const cartResult = await this.createCart(cartData);
 
