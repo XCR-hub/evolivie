@@ -1285,7 +1285,9 @@ class NeolianeService {
       '539': '3848',
       '540': '3849',
       // Exemple issu de la documentation pour les contrats obsèques
-      '619': '5092'
+      '619': '5092',
+      // Nouveaux produits santé 2025
+      '668': '7286'
     };
 
     if (mapping[productId]) {
