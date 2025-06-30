@@ -1037,30 +1037,71 @@ class NeolianeService {
       
       console.log(`🧮 Utilisation des IDs réels: produit=${productId}, formule=${formulaId}`);
 
-      // Étape 1: Créer le panier
+      // Construire la liste des membres avec tous les bénéficiaires
+      const members: Array<{
+        concern: string;
+        birthyear: string;
+        regime: string;
+        products: Array<{
+          product_id: string;
+          formula_id: string;
+        }>;
+      }> = [];
+
+      // Membre principal (adhérent)
+      members.push({
+        concern: "ADHERENT", // Utiliser le bon type de concern
+        birthyear: request.anneeNaissance.toString(),
+        regime: this.mapRegimeToApiValue(request.regime),
+        products: [
+          {
+            product_id: productId,
+            formula_id: formulaId
+          }
+        ]
+      });
+
+      // Ajouter le conjoint s'il existe
+      if (request.conjoint && request.conjoint.anneeNaissance) {
+        console.log('👫 Ajout du conjoint dans les membres');
+        members.push({
+          concern: "CONJOINT",
+          birthyear: request.conjoint.anneeNaissance.toString(),
+          regime: this.mapRegimeToApiValue(request.conjoint.regime),
+          products: [] // Les produits ne sont associés qu'au membre principal
+        });
+      }
+
+      // Ajouter les enfants s'ils existent
+      if (request.enfants && request.enfants.length > 0) {
+        console.log(`👶 Ajout de ${request.enfants.length} enfant(s) dans les membres`);
+        request.enfants.forEach((enfant, index) => {
+          if (enfant.anneeNaissance) {
+            members.push({
+              concern: "ENFANT",
+              birthyear: enfant.anneeNaissance.toString(),
+              regime: "6", // Régime étudiant par défaut pour les enfants
+              products: [] // Les produits ne sont associés qu'au membre principal
+            });
+          }
+        });
+      }
+
+      console.log(`👥 ${members.length} membre(s) ajouté(s) au panier:`, members.map(m => ({ concern: m.concern, birthyear: m.birthyear })));
+
+      // Étape 1: Créer le panier avec tous les membres
       const cartData: CartRequest = {
         total_amount: selectedOffre.prix.toString(),
         profile: {
           date_effect: dateEffect, // Objet avec year, month, day en NOMBRES
           zipcode: request.codePostal,
-          members: [
-            {
-              concern: "a1", // Valeur correcte selon la documentation
-              birthyear: request.anneeNaissance.toString(),
-              regime: this.mapRegimeToApiValue(request.regime),
-              products: [
-                {
-                  product_id: productId,
-                  formula_id: formulaId
-                }
-              ]
-            }
-          ]
+          members: members
         }
       };
 
       console.log('🛒 Création du panier avec les données:', JSON.stringify(cartData, null, 2));
       console.log("📅 Date formatée envoyée à l'API:", cartData.profile.date_effect);
+      console.log("👥 Membres envoyés à l'API:", cartData.profile.members);
       
       const cartResult = await this.createCart(cartData);
 
