@@ -92,6 +92,17 @@ export interface Product {
   gammeId: number;
   gammeLabel: string | null;
   type: string;
+  formulas?: ProductFormula[];
+}
+
+export interface ProductFormula {
+  formulaId: number;
+  formulaLabel: string | null;
+  price?: number;
+  guarantees?: Array<{
+    name: string;
+    level: string;
+  }>;
 }
 
 export interface ProductDocument {
@@ -119,6 +130,7 @@ export interface Offre {
   }>;
   product_id?: string;
   formula_id?: string;
+  formulaId?: number;
   gammeId?: number;
   documents?: ProductDocument[];
 }
@@ -148,7 +160,7 @@ class NeolianeService {
   private tokenExpiry: number = 0;
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.6');
+    console.log('🔧 Service Neoliane initialisé avec proxy evolivie.com - Version 3.7');
     console.log('🔑 Clé API pré-configurée et prête à l\'emploi');
   }
 
@@ -475,6 +487,37 @@ class NeolianeService {
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des produits:', error);
       throw error;
+    }
+  }
+
+  // Nouvelle méthode pour récupérer les formules d'un produit
+  public async getProductFormulas(gammeId: number): Promise<ProductFormula[]> {
+    try {
+      console.log(`🧮 Récupération des formules pour le produit ${gammeId}...`);
+      
+      if (!gammeId || gammeId <= 0) {
+        throw new Error(`ID de gamme invalide: ${gammeId}`);
+      }
+
+      const response = await this.makeProxyRequest(`/nws/public/v1/api/product/${gammeId}/formulas`);
+      
+      console.log('🔍 Réponse formules:', response);
+      
+      if (response && response.status && response.value) {
+        const formulas = Array.isArray(response.value) ? response.value : [];
+        console.log(`✅ ${formulas.length} formules récupérées pour le produit ${gammeId}`);
+        return formulas;
+      } else if (Array.isArray(response)) {
+        console.log(`✅ ${response.length} formules récupérées directement`);
+        return response;
+      } else {
+        console.log('⚠️ Aucune formule trouvée pour ce produit');
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des formules:', error);
+      // Ne pas faire échouer le processus si les formules ne sont pas disponibles
+      return [];
     }
   }
 
@@ -859,158 +902,67 @@ class NeolianeService {
       // Si aucun produit santé trouvé, utiliser tous les produits
       const productsToUse = healthProducts.length > 0 ? healthProducts : products;
 
-      // ÉTAPE 3: Créer les offres basées sur les vrais produits
+      // ÉTAPE 3: Pour chaque produit, récupérer ses formules RÉELLES
       const age = new Date().getFullYear() - request.anneeNaissance;
       const basePrice = this.calculateBasePrice(age, request.regime);
 
       const offres: Offre[] = [];
 
-      // Mapper les vrais produits Neoliane vers nos offres
       for (const product of productsToUse) {
         if (!product.gammeLabel) continue;
 
-        // Déterminer le multiplicateur de prix selon le nom du produit
-        let priceMultiplier = 1.0;
-        let garanties: Array<{nom: string, niveau: string}> = [];
+        try {
+          // Récupérer les formules réelles pour ce produit
+          console.log(`🧮 Récupération des formules pour ${product.gammeLabel} (ID: ${product.gammeId})`);
+          const formulas = await this.getProductFormulas(product.gammeId);
+          
+          if (formulas && formulas.length > 0) {
+            // Utiliser les vraies formules de l'API
+            for (const formula of formulas) {
+              const garanties = this.getGarantiesForProduct(product.gammeLabel);
+              const priceMultiplier = this.getPriceMultiplierForProduct(product.gammeLabel);
+              
+              const prixFinal = this.calculatePriceWithBeneficiaries(
+                basePrice * priceMultiplier,
+                request.conjoint,
+                request.enfants
+              );
 
-        const productName = product.gammeLabel.toLowerCase();
+              offres.push({
+                nom: formula.formulaLabel || product.gammeLabel,
+                prix: Math.round(prixFinal * 100) / 100,
+                product_id: product.gammeId.toString(),
+                formula_id: formula.formulaId.toString(),
+                formulaId: formula.formulaId,
+                gammeId: product.gammeId,
+                garanties: garanties
+              });
+            }
+          } else {
+            // Fallback: créer une offre avec une formule par défaut
+            console.log(`⚠️ Aucune formule trouvée pour ${product.gammeLabel}, utilisation d'une formule par défaut`);
+            const garanties = this.getGarantiesForProduct(product.gammeLabel);
+            const priceMultiplier = this.getPriceMultiplierForProduct(product.gammeLabel);
+            
+            const prixFinal = this.calculatePriceWithBeneficiaries(
+              basePrice * priceMultiplier,
+              request.conjoint,
+              request.enfants
+            );
 
-        // Mapping des vrais produits Neoliane
-        if (productName.includes('dynamique')) {
-          priceMultiplier = 0.8;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '80%' },
-            { nom: 'Pharmacie', niveau: '70%' },
-            { nom: 'Analyses', niveau: '80%' }
-          ];
-        } else if (productName.includes('hospisanté')) {
-          priceMultiplier = 0.9;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '85%' },
-            { nom: 'Pharmacie', niveau: '75%' },
-            { nom: 'Analyses', niveau: '85%' }
-          ];
-        } else if (productName.includes('innov')) {
-          priceMultiplier = 1.1;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '85%' },
-            { nom: 'Optique', niveau: '200€/an' },
-            { nom: 'Analyses', niveau: '100%' }
-          ];
-        } else if (productName.includes('performance')) {
-          priceMultiplier = 1.3;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '100%' },
-            { nom: 'Optique', niveau: '300€/an' },
-            { nom: 'Dentaire', niveau: '150%' },
-            { nom: 'Analyses', niveau: '100%' }
-          ];
-        } else if (productName.includes('plénitude')) {
-          priceMultiplier = 1.5;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '100%' },
-            { nom: 'Optique', niveau: '400€/an' },
-            { nom: 'Dentaire', niveau: '200%' },
-            { nom: 'Analyses', niveau: '100%' },
-            { nom: 'Médecines douces', niveau: '200€/an' }
-          ];
-        } else if (productName.includes('quiétude')) {
-          priceMultiplier = 1.7;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '100%' },
-            { nom: 'Optique', niveau: '500€/an' },
-            { nom: 'Dentaire', niveau: '250%' },
-            { nom: 'Analyses', niveau: '100%' },
-            { nom: 'Médecines douces', niveau: '300€/an' },
-            { nom: 'Cure thermale', niveau: '200€/an' }
-          ];
-        } else if (productName.includes('optima')) {
-          priceMultiplier = 2.0;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '100%' },
-            { nom: 'Optique', niveau: '700€/an' },
-            { nom: 'Dentaire', niveau: '300%' },
-            { nom: 'Analyses', niveau: '100%' },
-            { nom: 'Médecines douces', niveau: '400€/an' },
-            { nom: 'Cure thermale', niveau: '300€/an' },
-            { nom: 'Chambre particulière', niveau: 'Illimitée' }
-          ];
-        } else if (productName.includes('altosanté')) {
-          priceMultiplier = 2.3;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '100%' },
-            { nom: 'Optique', niveau: '900€/an' },
-            { nom: 'Dentaire', niveau: '400%' },
-            { nom: 'Analyses', niveau: '100%' },
-            { nom: 'Médecines douces', niveau: '500€/an' },
-            { nom: 'Cure thermale', niveau: '400€/an' },
-            { nom: 'Chambre particulière', niveau: 'Illimitée' },
-            { nom: 'Assistance internationale', niveau: 'Incluse' }
-          ];
-        } else if (productName.includes('pulse')) {
-          priceMultiplier = 1.2;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '90%' },
-            { nom: 'Optique', niveau: '250€/an' },
-            { nom: 'Dentaire', niveau: '120%' },
-            { nom: 'Analyses', niveau: '100%' },
-            { nom: 'Sport santé', niveau: '100€/an' }
-          ];
-        } else if (productName.includes('énergik') || productName.includes('energik')) {
-          priceMultiplier = 1.4;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '100%' },
-            { nom: 'Optique', niveau: '350€/an' },
-            { nom: 'Dentaire', niveau: '180%' },
-            { nom: 'Analyses', niveau: '100%' },
-            { nom: 'Médecines douces', niveau: '250€/an' },
-            { nom: 'Sport santé', niveau: '200€/an' }
-          ];
-        } else {
-          // Produit non reconnu, utiliser des valeurs par défaut
-          priceMultiplier = 1.0;
-          garanties = [
-            { nom: 'Hospitalisation', niveau: '100%' },
-            { nom: 'Médecine courante', niveau: '100%' },
-            { nom: 'Pharmacie', niveau: '80%' },
-            { nom: 'Analyses', niveau: '100%' }
-          ];
+            offres.push({
+              nom: product.gammeLabel,
+              prix: Math.round(prixFinal * 100) / 100,
+              product_id: product.gammeId.toString(),
+              formula_id: this.getDefaultFormulaId(product.gammeId),
+              gammeId: product.gammeId,
+              garanties: garanties
+            });
+          }
+        } catch (error) {
+          console.error(`❌ Erreur lors de la récupération des formules pour ${product.gammeLabel}:`, error);
+          // Continuer avec les autres produits
         }
-
-        // Calculer le prix final avec les bénéficiaires
-        const prixFinal = this.calculatePriceWithBeneficiaries(
-          basePrice * priceMultiplier,
-          request.conjoint,
-          request.enfants
-        );
-
-        offres.push({
-          nom: product.gammeLabel,
-          prix: Math.round(prixFinal * 100) / 100,
-          product_id: product.gammeId.toString(),
-          // Détermination automatique de la formule correspondante
-          formula_id: this.mapFormulaId(product.gammeId.toString()),
-          gammeId: product.gammeId,
-          garanties: garanties
-        });
       }
 
       // Trier les offres par prix croissant
@@ -1030,6 +982,94 @@ class NeolianeService {
       console.log('🔄 Fallback vers les offres simulées...');
       return this.getFallbackOffres(request);
     }
+  }
+
+  // Méthode pour obtenir les garanties selon le nom du produit
+  private getGarantiesForProduct(productName: string): Array<{nom: string, niveau: string}> {
+    const name = productName.toLowerCase();
+    
+    if (name.includes('dynamique')) {
+      return [
+        { nom: 'Hospitalisation', niveau: '100%' },
+        { nom: 'Médecine courante', niveau: '80%' },
+        { nom: 'Pharmacie', niveau: '70%' },
+        { nom: 'Analyses', niveau: '80%' }
+      ];
+    } else if (name.includes('hospisanté') || name.includes('hospisante')) {
+      return [
+        { nom: 'Hospitalisation', niveau: '100%' },
+        { nom: 'Médecine courante', niveau: '85%' },
+        { nom: 'Pharmacie', niveau: '75%' },
+        { nom: 'Analyses', niveau: '85%' }
+      ];
+    } else if (name.includes('innov')) {
+      return [
+        { nom: 'Hospitalisation', niveau: '100%' },
+        { nom: 'Médecine courante', niveau: '100%' },
+        { nom: 'Pharmacie', niveau: '85%' },
+        { nom: 'Optique', niveau: '200€/an' },
+        { nom: 'Analyses', niveau: '100%' }
+      ];
+    } else if (name.includes('altosanté') || name.includes('altosante')) {
+      return [
+        { nom: 'Hospitalisation', niveau: '100%' },
+        { nom: 'Médecine courante', niveau: '100%' },
+        { nom: 'Pharmacie', niveau: '100%' },
+        { nom: 'Optique', niveau: '900€/an' },
+        { nom: 'Dentaire', niveau: '400%' },
+        { nom: 'Analyses', niveau: '100%' },
+        { nom: 'Médecines douces', niveau: '500€/an' },
+        { nom: 'Cure thermale', niveau: '400€/an' },
+        { nom: 'Chambre particulière', niveau: 'Illimitée' },
+        { nom: 'Assistance internationale', niveau: 'Incluse' }
+      ];
+    } else {
+      // Garanties par défaut
+      return [
+        { nom: 'Hospitalisation', niveau: '100%' },
+        { nom: 'Médecine courante', niveau: '100%' },
+        { nom: 'Pharmacie', niveau: '80%' },
+        { nom: 'Analyses', niveau: '100%' }
+      ];
+    }
+  }
+
+  // Méthode pour obtenir le multiplicateur de prix selon le nom du produit
+  private getPriceMultiplierForProduct(productName: string): number {
+    const name = productName.toLowerCase();
+    
+    if (name.includes('dynamique')) return 0.8;
+    if (name.includes('hospisanté') || name.includes('hospisante')) return 0.9;
+    if (name.includes('innov')) return 1.1;
+    if (name.includes('altosanté') || name.includes('altosante')) return 2.3;
+    if (name.includes('performance')) return 1.3;
+    if (name.includes('plénitude')) return 1.5;
+    if (name.includes('quiétude')) return 1.7;
+    if (name.includes('optima')) return 2.0;
+    if (name.includes('pulse')) return 1.2;
+    if (name.includes('énergik') || name.includes('energik')) return 1.4;
+    
+    return 1.0; // Multiplicateur par défaut
+  }
+
+  // Méthode pour obtenir un ID de formule par défaut
+  private getDefaultFormulaId(gammeId: number): string {
+    // Utiliser une formule par défaut basée sur l'ID du produit
+    // Cette méthode sera utilisée uniquement si aucune formule n'est trouvée via l'API
+    const knownMappings: { [key: number]: string } = {
+      538: '3847',
+      539: '3848',
+      540: '3849',
+      619: '5092',
+      687: '4996' // Exemple pour AltoSante
+    };
+    
+    if (knownMappings[gammeId]) {
+      return knownMappings[gammeId];
+    }
+    
+    // Formule par défaut calculée
+    return (gammeId + 3000).toString();
   }
 
   // Méthode de fallback avec les offres simulées (en cas d'erreur API)
@@ -1161,6 +1201,11 @@ class NeolianeService {
       const dateEffect = this.formatDateEffect(request.dateEffet);
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
+      // Utiliser le formula_id de l'offre (qui vient maintenant de l'API réelle)
+      const formulaId = selectedOffre.formula_id || selectedOffre.formulaId?.toString() || this.getDefaultFormulaId(selectedOffre.gammeId || 538);
+      
+      console.log(`🧮 Utilisation de la formule: ${formulaId} pour le produit ${selectedOffre.product_id}`);
+
       // Étape 1: Créer le panier
       const cartData: CartRequest = {
         total_amount: selectedOffre.prix.toString(),
@@ -1175,12 +1220,7 @@ class NeolianeService {
               products: [
                 {
                   product_id: selectedOffre.product_id || '538',
-                  // Ne pas remapper si l'offre possède déjà un formula_id
-                  // La valeur est simplement nettoyée pour ne conserver que les chiffres
-                  // et en cas d'absence on calcule à partir du product_id
-                  formula_id: selectedOffre.formula_id
-                    ? this.sanitizeFormulaId(selectedOffre.formula_id)
-                    : this.mapFormulaId(selectedOffre.product_id || '538')
+                  formula_id: formulaId
                 }
               ]
             }
@@ -1267,38 +1307,6 @@ class NeolianeService {
     console.log(`🔄 Mapping CSP: "${regime}" -> "${mappedValue}"`);
     
     return mappedValue || '11'; // Salarié par défaut
-  }
-
-  // Nettoyage de l'identifiant de formule pour garantir un entier
-  private sanitizeFormulaId(formulaId?: string): string | undefined {
-    if (!formulaId) return formulaId;
-    const match = formulaId.match(/\d+/);
-    return match ? match[0] : formulaId;
-  }
-
-  // Mappe un identifiant de produit (gammeId) vers l'identifiant de formule attendu
-  // Certains produits utilisent un ID différent pour la formule. Pour les cas
-  // connus on retourne la valeur officielle, sinon on applique une règle par défaut
-  private mapFormulaId(productId: string): string {
-    const mapping: { [key: string]: string } = {
-      '538': '3847',
-      '539': '3848',
-      '540': '3849',
-      // Exemple issu de la documentation pour les contrats obsèques
-      '619': '5092'
-    };
-
-    if (mapping[productId]) {
-      return mapping[productId];
-    }
-
-    const id = parseInt(productId, 10);
-    if (!isNaN(id)) {
-      // La majorité des produits santé semblent suivre ce décalage constant
-      return (id + 3309).toString();
-    }
-
-    return productId;
   }
 
   // Méthodes de configuration (simplifiées car la clé est intégrée)
