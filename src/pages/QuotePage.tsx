@@ -11,10 +11,11 @@ import SEOHead from '../components/SEOHead';
 const QuotePage: React.FC = () => {
   const navigate = useNavigate();
   
-  // Calculate the first day of next month as default date in YYYY-MM-DD format
+  // Calculate the first day of the month after next month as default date in YYYY-MM-DD format
   const getFirstDayOfNextMonth = () => {
     const today = new Date();
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    // Add 2 months instead of 1 to provide more lead time for the API
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
     const year = nextMonth.getFullYear();
     const month = String(nextMonth.getMonth() + 1).padStart(2, '0');
     const day = String(nextMonth.getDate()).padStart(2, '0');
