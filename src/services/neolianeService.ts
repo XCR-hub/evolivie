@@ -158,16 +158,16 @@ export interface SubscriptionFlowState {
 
 class NeolianeService {
   // Clés API intégrées directement dans le service (mais non utilisées en mode simulation)
-  private clientId = 'e543ff562ad33f763ad9220fe9110bf59c7ebd3736d618f1dc699632a86165eb';
-  private clientSecret = '4db90db4a8c18212469a925612ba497e033d83497620133c606e9fe777302f6b';
-  private userKey = '9162f8b63e4fc4778d0d5c66a6fd563bb87185ed2a02abd172fa586c8668f4b2';
+  private clientId = import.meta.env.VITE_NEOLIANE_CLIENT_ID || 'e543ff562ad33f763ad9220fe9110bf59c7ebd3736d618f1dc699632a86165eb';
+  private clientSecret = import.meta.env.VITE_NEOLIANE_CLIENT_SECRET || '4db90db4a8c18212469a925612ba497e033d83497620133c606e9fe777302f6b';
+  private userKey = import.meta.env.VITE_NEOLIANE_USER_KEY || '9162f8b63e4fc4778d0d5c66a6fd563bb87185ed2a02abd172fa586c8668f4b2';
   private accessToken: string | null = 'simulated_token_' + Date.now();
   private tokenExpiry: number = Date.now() + 3600000; // 1 heure
-  private simulationMode = true; // Mode simulation activé
+  private simulationMode = import.meta.env.VITE_SIMULATION_MODE === 'true'; // Mode simulation basé sur la variable d'environnement
 
   constructor() {
-    console.log('🔧 Service Neoliane initialisé en mode SIMULATION - Version 6.0');
-    console.log('🔑 Clé API pré-configurée (non utilisée en mode simulation)');
+    console.log(`🔧 Service Neoliane initialisé en mode ${this.simulationMode ? 'SIMULATION' : 'PRODUCTION'} - Version 6.0`);
+    console.log('🔑 Clé API pré-configurée');
   }
 
   // Méthode pour faire des requêtes simulées

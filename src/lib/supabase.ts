@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://yclbtxnqqlbmejkoyhwy.supabase.co'
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljbGJ0eG5xcWxibWVqa295aHd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExOTMyMTEsImV4cCI6MjA2Njc2OTIxMX0.6XDv32_KadvdU_4WG_SJM3JkbOAgeTnSLJhAK_bOB5A'
+// Récupérer les variables d'environnement
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
