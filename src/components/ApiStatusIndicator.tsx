@@ -44,19 +44,15 @@ const ApiStatusIndicator: React.FC<ApiStatusIndicatorProps> = ({ onClick }) => {
       onClick();
     } else {
       // Si aucun gestionnaire de clic n'est fourni, afficher un toast avec le statut
-      if (isConnected) {
-        toast.info('Mode simulation activé - Toutes les fonctionnalités sont disponibles');
-      } else {
-        toast.info('Mode simulation activé - Toutes les fonctionnalités sont disponibles');
-      }
+      toast.info('Mode simulation activé - Les prix affichés sont des estimations');
     }
   };
 
   return (
     <motion.button
       onClick={handleClick}
-      className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-      title="Mode simulation activé"
+      className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors relative"
+      title="Mode simulation activé - Les prix affichés sont des estimations"
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
     >
@@ -86,6 +82,9 @@ const ApiStatusIndicator: React.FC<ApiStatusIndicatorProps> = ({ onClick }) => {
           }}
         >
           <Heart className="text-green-500" size={20} fill="currentColor" />
+          <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+            S
+          </span>
         </motion.div>
       )}
     </motion.button>

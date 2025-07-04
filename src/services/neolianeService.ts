@@ -161,9 +161,9 @@ class NeolianeService {
   private clientId = 'e543ff562ad33f763ad9220fe9110bf59c7ebd3736d618f1dc699632a86165eb';
   private clientSecret = '4db90db4a8c18212469a925612ba497e033d83497620133c606e9fe777302f6b';
   private userKey = '9162f8b63e4fc4778d0d5c66a6fd563bb87185ed2a02abd172fa586c8668f4b2';
-  private accessToken: string | null = null;
-  private tokenExpiry: number = 0;
-  private simulationMode = true; // Toujours en mode simulation pour éviter les erreurs API
+  private accessToken: string | null = 'simulated_token_' + Date.now();
+  private tokenExpiry: number = Date.now() + 3600000; // 1 heure
+  private simulationMode = true; // Mode simulation activé
 
   constructor() {
     console.log('🔧 Service Neoliane initialisé en mode SIMULATION - Version 6.0');
@@ -373,38 +373,38 @@ class NeolianeService {
   private getSimulatedProducts(): Product[] {
     return [
       {
-        gammeId: 1,
-        gammeLabel: 'Formule Essentielle',
+        gammeId: 538,
+        gammeLabel: 'Formule Essentielle TNS',
         type: 'sante',
         formulas: [
           {
-            formulaId: 1,
+            formulaId: 3847,
             formulaLabel: 'Essentielle',
-            price: 45.99
+            price: 39.99
           }
         ]
       },
       {
-        gammeId: 2,
-        gammeLabel: 'Formule Confort',
+        gammeId: 539,
+        gammeLabel: 'Formule Confort TNS',
         type: 'sante',
         formulas: [
           {
-            formulaId: 2,
+            formulaId: 3848,
             formulaLabel: 'Confort',
-            price: 65.99
+            price: 59.99
           }
         ]
       },
       {
-        gammeId: 3,
-        gammeLabel: 'Formule Premium',
+        gammeId: 540,
+        gammeLabel: 'Formule Premium TNS',
         type: 'sante',
         formulas: [
           {
-            formulaId: 3,
+            formulaId: 3849,
             formulaLabel: 'Premium',
-            price: 85.99
+            price: 79.99
           }
         ]
       }
@@ -951,13 +951,6 @@ class NeolianeService {
       console.log('💰 Récupération des offres (SIMULATION)...');
       console.log('📋 Paramètres:', request);
 
-      // Vérifier le format de la date
-      try {
-        this.formatDateEffect(request.dateEffet);
-      } catch (error: any) {
-        throw new Error(`Erreur de date: ${error.message}`);
-      }
-
       // Simuler un délai réseau
       await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -969,9 +962,9 @@ class NeolianeService {
         {
           nom: 'Formule Essentielle',
           multiplier: 0.7,
-          product_id: '1',
-          formula_id: '1',
-          gammeId: 1,
+          product_id: '538',
+          formula_id: '3847',
+          gammeId: 538,
           garanties: [
             { nom: 'Hospitalisation', niveau: '100%' },
             { nom: 'Médecine courante', niveau: '70%' },
@@ -982,9 +975,9 @@ class NeolianeService {
         {
           nom: 'Formule Confort',
           multiplier: 1.0,
-          product_id: '2',
-          formula_id: '2',
-          gammeId: 2,
+          product_id: '539',
+          formula_id: '3848',
+          gammeId: 539,
           garanties: [
             { nom: 'Hospitalisation', niveau: '100%' },
             { nom: 'Médecine courante', niveau: '100%' },
@@ -996,9 +989,9 @@ class NeolianeService {
         {
           nom: 'Formule Premium',
           multiplier: 1.4,
-          product_id: '3',
-          formula_id: '3',
-          gammeId: 3,
+          product_id: '540',
+          formula_id: '3849',
+          gammeId: 540,
           garanties: [
             { nom: 'Hospitalisation', niveau: '100%' },
             { nom: 'Médecine courante', niveau: '100%' },
@@ -1081,7 +1074,7 @@ class NeolianeService {
   }
 
   private calculateBasePrice(age: number, regime: string): number {
-    let basePrice = 45; // Prix de base
+    let basePrice = 35; // Prix de base réduit pour être plus réaliste
 
     // Ajustement selon l'âge
     if (age < 25) {
@@ -1101,17 +1094,17 @@ class NeolianeService {
     // Ajustement selon le régime
     switch (regime) {
       case 'TNS Indépendant':
-        basePrice *= 1.1;
+        basePrice *= 1.15;
         break;
       case 'Retraité salarié':
       case 'Retraité TNS':
-        basePrice *= 1.3;
+        basePrice *= 1.4;
         break;
       case 'Etudiant':
-        basePrice *= 0.7;
+        basePrice *= 0.6;
         break;
       case 'Sans emploi':
-        basePrice *= 0.8;
+        basePrice *= 0.75;
         break;
     }
 
@@ -1178,8 +1171,8 @@ class NeolianeService {
       console.log('📅 Date formatée pour l\'API:', dateEffect);
 
       // Utiliser les IDs de l'offre
-      const formulaId = selectedOffre.formula_id || '1';
-      const productId = selectedOffre.product_id || '1';
+      const formulaId = selectedOffre.formula_id || '3847';
+      const productId = selectedOffre.product_id || '538';
       
       console.log(`🧮 Utilisation des IDs: produit=${productId}, formule=${formulaId}`);
 
@@ -1196,7 +1189,7 @@ class NeolianeService {
 
       // Membre principal (adhérent)
       members.push({
-        concern: "1", // 1 = ADHERENT selon l'API Neoliane
+        concern: "a1", // a1 = ADHERENT selon l'API Neoliane
         birthyear: request.anneeNaissance.toString(),
         regime: this.mapRegimeToApiValue(request.regime),
         products: [
@@ -1211,7 +1204,7 @@ class NeolianeService {
       if (request.conjoint && request.conjoint.anneeNaissance) {
         console.log('👫 Ajout du conjoint dans les membres');
         members.push({
-          concern: "2", // 2 = CONJOINT selon l'API Neoliane
+          concern: "c1", // c1 = CONJOINT selon l'API Neoliane
           birthyear: request.conjoint.anneeNaissance.toString(),
           regime: this.mapRegimeToApiValue(request.conjoint.regime),
           products: [] // Les produits ne sont associés qu'au membre principal
@@ -1224,7 +1217,7 @@ class NeolianeService {
         request.enfants.forEach((enfant, index) => {
           if (enfant.anneeNaissance) {
             members.push({
-              concern: "3", // 3 = ENFANT selon l'API Neoliane
+              concern: `e${index + 1}`, // e1, e2, etc. = ENFANT selon l'API Neoliane
               birthyear: enfant.anneeNaissance.toString(),
               regime: "6", // Régime étudiant par défaut pour les enfants
               products: [] // Les produits ne sont associés qu'au membre principal
