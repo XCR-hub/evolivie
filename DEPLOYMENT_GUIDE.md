@@ -6,8 +6,10 @@ Si vous obtenez l'erreur "Expected a JavaScript module script but the server res
 
 ### 1. Préparer l'environnement local
 ```bash
-# Installer Node.js (version 18 ou plus récente)
+# Installer Node.js (version 18.x LTS recommandée pour la stabilité)
 # Télécharger depuis https://nodejs.org/
+# Pour éviter les problèmes de compatibilité, utilisez Node.js 18.x LTS
+# Si vous utilisez nvm : nvm install 18 && nvm use 18
 
 # Vérifier l'installation
 node --version
@@ -81,6 +83,12 @@ Si vous utilisez des variables d'environnement, elles sont compilées dans le bu
 ## Commandes de développement
 
 ```bash
+# Si vous rencontrez des erreurs de runtime Node.js :
+# 1. Nettoyer les dépendances
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install
+
 # Développement local
 npm run dev
 
@@ -93,6 +101,7 @@ npm run preview
 
 ## Points importants
 
+1. **Utilisez Node.js 18.x LTS** pour éviter les problèmes de compatibilité
 1. **Ne jamais uploader `node_modules/`** - Seulement le contenu de `dist/`
 2. **Le fichier `.htaccess` est essentiel** pour les applications React
 3. **Vider le cache du navigateur** après chaque déploiement
